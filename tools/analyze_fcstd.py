@@ -22,11 +22,16 @@ from pathlib import Path
 import FreeCAD
 
 
-# TypeIds we explicitly support per the tier plan.
+# TypeIds we explicitly support per the tier plan. Expanded after analysing
+# the FreeCAD Parts Library — see SPEC.md §12.6.
 TIER_TYPEIDS = {
-    1: {  # primitives (Part workbench)
+    1: {  # primitives (Part workbench + PartDesign primitives)
         "Part::Box", "Part::Cylinder", "Part::Sphere", "Part::Cone", "Part::Torus",
-        "Part::Plane", "Part::Wedge", "Part::Prism", "Part::Ellipsoid",
+        "Part::Plane", "Part::Wedge", "Part::Prism", "Part::Ellipsoid", "Part::Helix",
+        "PartDesign::AdditiveBox", "PartDesign::AdditiveCylinder",
+        "PartDesign::AdditiveSphere", "PartDesign::AdditiveCone",
+        "PartDesign::AdditiveTorus", "PartDesign::AdditiveEllipsoid",
+        "PartDesign::AdditivePrism", "PartDesign::AdditiveWedge",
     },
     2: {  # core PartDesign + Sketcher + Part-workbench feature ops
         "PartDesign::Body", "Sketcher::SketchObject",
@@ -34,24 +39,33 @@ TIER_TYPEIDS = {
         "PartDesign::Groove", "PartDesign::Hole",
         "PartDesign::Plane", "PartDesign::Line", "PartDesign::Point",
         "PartDesign::ShapeBinder", "PartDesign::SubShapeBinder",
-        # Part workbench operations (treated equivalently)
+        # Sweep / loft / helix as feature operations
+        "PartDesign::AdditivePipe", "PartDesign::SubtractivePipe",
+        "PartDesign::AdditiveLoft", "PartDesign::SubtractiveLoft",
+        "PartDesign::AdditiveHelix", "PartDesign::SubtractiveHelix",
+        # Part workbench equivalents
         "Part::Extrusion", "Part::Revolution", "Part::Loft", "Part::Sweep",
-        "Part::Mirroring",
+        "Part::Mirroring", "Part::Compound",
     },
     3: {  # dress-up features
         "PartDesign::Fillet", "PartDesign::Chamfer", "PartDesign::Draft",
-        "PartDesign::Thickness", "Part::Fillet", "Part::Chamfer",
+        "PartDesign::Thickness",
+        "Part::Fillet", "Part::Chamfer", "Part::Thickness", "Part::Offset",
     },
     4: {  # patterns
         "PartDesign::LinearPattern", "PartDesign::PolarPattern", "PartDesign::Mirrored",
         "PartDesign::MultiTransform",
     },
-    5: {  # booleans between bodies
+    5: {  # booleans + generic imported shapes
         "Part::Cut", "Part::Fuse", "Part::Common", "Part::MultiFuse", "Part::MultiCommon",
         "PartDesign::Boolean",
+        # Files with bare Part::Feature objects have no parametric history.
+        # The translator handles these via the shape-import path (STEP round
+        # trip) — geometry survives, parametric editability is lost.
+        "Part::Feature",
     },
-    6: {  # parametric driver
-        "Spreadsheet::Sheet",
+    6: {  # parametric drivers
+        "Spreadsheet::Sheet", "App::VarSet",
     },
 }
 
@@ -59,7 +73,14 @@ TIER_TYPEIDS = {
 # operation — never blocks scope.
 INFRASTRUCTURE_TYPES = {
     "App::Origin", "App::Line", "App::Plane", "App::Part",
-    "App::DocumentObjectGroup", "App::GeoFeatureGroupExtensionPython",
+    "App::DocumentObjectGroup", "App::DocumentObjectGroupPython",
+    "App::GeoFeatureGroupExtensionPython",
+    "App::TextDocument", "App::Annotation", "App::GeometryPython",
+    "App::MaterialObjectPython",
+    "PartDesign::CoordinateSystem",
+    "PartDesign::FeatureBase",
+    "Measure::MeasureDistanceDetached",
+    "Image::ImagePlane",
 }
 
 # Generic Python-extension wrappers — appear in many real files (gear
@@ -67,6 +88,7 @@ INFRASTRUCTURE_TYPES = {
 # need to look at each one's wrapped behaviour.
 EXTENSION_TYPES = {
     "Part::FeaturePython", "App::FeaturePython", "Part::Part2DObjectPython",
+    "PartDesign::FeaturePython",
 }
 
 # Workbenches that are explicitly out of scope per SPEC.md.
@@ -79,7 +101,14 @@ OUT_OF_SCOPE_PREFIXES = (
     "TechDraw::",       # Drawing
     "Sheetmetal::",     # Sheet Metal
     "Surface::",        # Surface
+    "Mesh::",           # Mesh workbench (different from BRep)
 )
+
+# Out-of-scope individual types that don't share a clean prefix.
+OUT_OF_SCOPE_TYPES = {
+    # Cross-document linking is assembly-adjacent; defer with Assembly.
+    "App::Link", "App::LinkElement", "App::LinkGroup",
+}
 
 
 def _tier_of(typeid: str) -> int | None:
@@ -133,7 +162,10 @@ def analyze(path: Path) -> dict:
 
             tier = _tier_of(tid)
             if tier is None:
-                if any(tid.startswith(p) for p in OUT_OF_SCOPE_PREFIXES):
+                if (
+                    any(tid.startswith(p) for p in OUT_OF_SCOPE_PREFIXES)
+                    or tid in OUT_OF_SCOPE_TYPES
+                ):
                     out_of_scope[tid] += 1
                 elif tid in INFRASTRUCTURE_TYPES or tid in EXTENSION_TYPES:
                     pass  # not blocking
@@ -208,17 +240,27 @@ def _print_table(records: list[dict]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("files", nargs="+", type=Path)
+    parser.add_argument("files", nargs="*", type=Path, help="Files to analyse (or use --input-list)")
+    parser.add_argument("--input-list", type=Path, default=None,
+                        help="Read newline-separated file paths from this file (handles spaces).")
     parser.add_argument("--table", action="store_true", help="Print human-readable table")
     parser.add_argument("--json", type=Path, default=None, help="Write JSON records to this path")
     args = parser.parse_args()
 
+    files = list(args.files)
+    if args.input_list:
+        files.extend(Path(line) for line in args.input_list.read_text().splitlines() if line.strip())
+    if not files:
+        parser.error("Provide files as positional args or via --input-list.")
+
     records = []
-    for f in args.files:
+    for i, f in enumerate(files, 1):
         try:
             records.append(analyze(f))
         except Exception:
             records.append({"file": str(f), "error": traceback.format_exc(limit=2)})
+        if i % 100 == 0:
+            print(f"  [{i}/{len(files)}] ...", flush=True)
 
     if args.json:
         args.json.write_text(json.dumps(records, indent=2) + "\n")
