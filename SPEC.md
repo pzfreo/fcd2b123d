@@ -44,15 +44,17 @@ The translator runs **inside a FreeCAD Python environment**, using FreeCAD's own
 
 Each tier is a milestone. Each tier landing means: translator handles the feature, property-comparison tests pass on representative fixtures, and any new edge cases are documented.
 
-| Tier | Features | Why it's a tier boundary |
-|------|----------|--------------------------|
-| 1 | `Part::Box`, `Cylinder`, `Sphere`, `Cone`, `Torus` | Sanity check on the comparison harness itself. |
-| 2 | `PartDesign::Body`, `Sketcher::SketchObject`, `Pad`, `Pocket`, `Revolution` | Core PartDesign workflow. Covers ~50% of real files. |
-| 3 | `PartDesign::Fillet`, `Chamfer`, `Draft` | **Topological naming bites here.** Validates the FreeCAD-runtime approach. |
-| 4 | `LinearPattern`, `PolarPattern`, `Mirrored` | Pattern features. Need transform resolution. |
-| 5 | Boolean ops between bodies (`Part::Cut`, `Fuse`, `Common`) | Multi-body interaction. |
-| 6 | `Spreadsheet::Sheet` + aliases + expressions on properties | The "named variables preserved" promise. |
-| 7 | Selected real designs from FreeCAD Parts Library | End-to-end validation on non-toy input. |
+Cumulative coverage percentages are empirical from the Parts Library survey — see §13 for the data and `tools/analyze_fcstd.py` for the canonical TypeId mapping.
+
+| Tier | Features | Cumulative coverage | Why it's a tier boundary |
+|------|----------|---------------------|--------------------------|
+| 1 | Primitives: `Part::Box/Cylinder/Sphere/Cone/Torus/Helix/...`, `PartDesign::AdditiveBox/Cylinder/...` | 13% | Sanity check on the comparison harness itself. |
+| 2 | `PartDesign::Body`, `Sketcher::SketchObject`, `Pad`, `Pocket`, `Revolution`, sweep/loft/helix as features, Part-workbench equivalents (`Extrusion`, `Revolution`, `Loft`, `Sweep`) | **61%** | Core PartDesign workflow. The workhorse. |
+| 3 | `Fillet`, `Chamfer`, `Draft`, `Thickness`, `Offset` | 67% | **Topological naming bites here.** Validates the FreeCAD-runtime approach. |
+| 4 | `LinearPattern`, `PolarPattern`, `Mirrored`, `MultiTransform` | 69% | Pattern features. Need transform resolution. |
+| 5 | Boolean ops (`Part::Cut/Fuse/Common`); `Part::Feature` via shape-import fallback | 82% | Multi-body interaction + the graceful-degradation path for parts without parametric history. |
+| 6 | `Spreadsheet::Sheet` aliases + `App::VarSet` + property expressions | **99%** | The "named variables preserved" promise. Second-largest tier. |
+| 7 | Selected real designs from FreeCAD Parts Library | n/a | End-to-end validation on non-toy input. |
 
 We stop at the tier where current effort runs out. The project ships meaningfully at any tier ≥ 3.
 
@@ -304,3 +306,72 @@ done
 ```
 
 Bundled fixtures: copy from `.conda/envs/freecad/share/examples/` (or `Mod/.../`) into the appropriate `tests/fixtures/tierN_*/` directory.
+
+## 13. Parts Library coverage analysis
+
+### 13.1 Why this section exists
+
+The bundled-examples set (§12) yielded only 3 in-scope files out of 21. That number is misleading because FreeCAD ships *workbench demos* (one Assembly demo, one FEM demo, one BIM demo, etc.) rather than parts representative of typical user work. To get an honest answer to "does this tool address a meaningful fraction of real-world FreeCAD usage?" we ran the analyzer against the full FreeCAD Parts Library (`github.com/FreeCAD/FreeCAD-library`, ~4.1 GB, 3,194 `.FCStd` files at the time of writing).
+
+### 13.2 Methodology
+
+- Shallow clone of the Parts Library to a working directory.
+- `tools/analyze_fcstd.py --input-list ...` walks every `.FCStd` in one Python invocation, classifies each by TypeId composition, and writes a per-file JSON record.
+- `tools/summarize_analysis.py` aggregates the JSON into coverage stats.
+
+An initial run with the conservative tier map showed 88% in scope. Inspection of the 12% rejected revealed that nearly all of it was tier-map gaps (operations like `PartDesign::AdditivePipe`, `PartDesign::AdditiveLoft`, `Part::Helix`, `Part::Thickness`, `App::VarSet`) — real PartDesign/Part operations that were simply missing from the analyzer's vocabulary. The tier map in `tools/analyze_fcstd.py` was expanded to cover those operations and the analyzer re-run.
+
+### 13.3 Coverage results
+
+**98.7% of files (3,151 of 3,194) in scope.**
+
+| Tier | Files added | % of in-scope | Cumulative files | Cumulative % of all |
+|------|-------------|---------------|------------------|---------------------|
+| 1 (primitives) | 411 | 13.0% | 411 | 12.9% |
+| 2 (PartDesign + Sketcher + sweep/loft/helix) | 1,535 | 48.7% | 1,946 | **60.9%** |
+| 3 (fillets / chamfers / shell / offset) | 178 | 5.6% | 2,124 | 66.5% |
+| 4 (patterns) | 88 | 2.8% | 2,212 | 69.3% |
+| 5 (booleans + `Part::Feature` shape-import fallback) | 392 | 12.4% | 2,604 | 81.5% |
+| 6 (`Spreadsheet::Sheet` + `App::VarSet`) | 547 | 17.4% | 3,151 | **98.7%** |
+
+Each tier release is meaningful:
+- Tier 2 alone delivers **61% of files** — confirming the "workhorse tier" framing.
+- Tier 3 unlocks an additional 6 points for the most architecturally risky work (topological naming).
+- Tier 5's 12-point gain comes mostly from including `Part::Feature` as a "translate the resolved BRep" path (see §13.5).
+- Tier 6 is the **second-largest tier** at 17% — Spreadsheet+VarSet parametric drivers are real-user-need territory, not a niche.
+
+### 13.4 What is actually out of scope
+
+The remaining 43 files (1.3%) all match the project's documented non-goals:
+
+| Category | Files | Notes |
+|----------|-------|-------|
+| TechDraw drawings | ~17 | Drawing workbench, not parametric CAD |
+| `Mesh::Feature` | 10 | Mesh workbench (different from BRep modelling) |
+| `App::Link` / `LinkElement` / `LinkGroup` | 14 | Cross-document linking; assembly-adjacent, deferred with the Assembly non-goal |
+| `Part::Circle` | 1 | Easy to add later; one-off legitimate gap |
+
+The tool's scope is well-aligned with how the Parts Library is actually built.
+
+### 13.5 FeaturePython prevalence — degradation strategy
+
+**610 of the 3,151 in-scope files (21%)** contain FeaturePython extensions: community-authored parametric Python objects (gear generators, fastener parts, thread/bolt generators).
+
+- 12.6% of all files use `Part::Part2DObjectPython` (often gear profiles).
+- 8.2% use `Part::FeaturePython` (gear/fastener generators).
+- 1.0% use `App::FeaturePython`.
+
+These files are "in scope" in the sense that they contain tier-recognized operations alongside the FeaturePython parts. The FeaturePython parts themselves have no canonical translation to build123d — their parametric behaviour is custom Python code we don't have at translation time.
+
+**v1 strategy**: the same as `Part::Feature` (tier 5) — translate the resolved BRep via shape import. Geometry survives; the FeaturePython's parametric driver is lost. The emitted build123d code annotates these blocks so a reader knows the source object was flattened rather than translated.
+
+### 13.6 Implications
+
+The bundled-examples concern ("we can only translate 3 of the examples") is resolved. The real-world coverage is **98.7%** — the tool addresses the vast majority of actual parametric CAD work.
+
+The tier ordering in §5 is empirically validated:
+- Tier 2 is correctly identified as the workhorse.
+- Tier 6 is the second-largest tier, not a "nice to have" — the named-variable preservation investment is well-founded.
+- Tier 3's small percentage (~6 points) reflects that fillets/chamfers are common operations in many files; the work isn't about breadth, it's about correctness on a hard problem (topological naming).
+
+A graceful-degradation path is now part of the v1 surface. Including `Part::Feature` in tier 5 with the shape-import fallback adds 12 points of coverage but commits us to "translate the geometry, drop the parametric history" for arbitrary BRep inputs. This is a deliberate trade — the alternative (rejecting Part::Feature outright) would cost real coverage with no offsetting benefit.
