@@ -30,6 +30,16 @@ def extract_freecad(obj) -> Properties:
     import numpy as np
 
     shape = obj.Shape
+    # PartDesign::Body and similar containers wrap their result in a Compound
+    # even when there is exactly one solid. Unwrap so MatrixOfInertia works.
+    if shape.ShapeType == "Compound":
+        if len(shape.Solids) == 1:
+            shape = shape.Solids[0]
+        else:
+            raise RuntimeError(
+                f"Compound contains {len(shape.Solids)} solids; multi-solid "
+                f"targets not supported in v1"
+            )
     moi = shape.MatrixOfInertia
     M = np.array(
         [
