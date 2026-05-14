@@ -1,0 +1,16 @@
+{
+  "volume": 3750.0,
+  "surface_area": 1549.9999999999998,
+  "center_of_mass": [
+    12.5,
+    7.5,
+    5.0
+  ],
+  "principal_moi": [
+    101562.5,
+    226562.5,
+    265625.0
+  ],
+  "source": "freecad-1.0.0",
+  "snapshot_date": "2026-05-14"
+}

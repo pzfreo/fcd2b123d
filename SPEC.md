@@ -215,3 +215,92 @@ Tier 3 ships with:
 - Docker image published.
 
 Anything beyond tier 3 is bonus.
+
+## 12. Fixture priorities
+
+### 12.1 Analysis of bundled FreeCAD examples
+
+`tools/analyze_fcstd.py` was run against all 21 `.FCStd` files shipped in the FreeCAD 1.0 conda-forge install. Only **3** are in-scope per Section 3's non-goals.
+
+**In scope (3):**
+
+| File | Source path | Max tier | Composition |
+|---|---|---|---|
+| `PartDesignExample.FCStd` | `share/examples/` | 2 | 1 Body, 4 Sketches (57 constraints), 1 Pad, 3 Pockets |
+| `Drilling_1.FCStd` | `Mod/CAM/CAMTests/` | 4 | 1 Body, 15 Sketches (43 constraints), 3 Pads, 12 Pockets, LinearPattern, PolarPattern |
+| `EngineBlock.FCStd` | `share/examples/` | 5 | Part workbench: 5 Box, 3 Cylinder, 7 Extrusion, 3 MultiFuse, 5 Cut, 1 MultiCommon, 3 Mirroring, 8 `Part::Part2DObjectPython` |
+
+**Out of scope (14):**
+
+| File | Reason |
+|---|---|
+| `AssemblyExample.FCStd` | Assembly workbench (non-goal) |
+| `BIMExample.FCStd` | TechDraw + Arch (BIM) |
+| `FEMExample.FCStd`, `all_objects_de9b3fb438.FCStd`, 5× `box*.FCStd` and `constraint_contact_*.FCStd` | FEM workbench |
+| `draft_test_objects.FCStd` | Draft workbench |
+| `drill_test1.FCStd`, `OpHelix_v0-21.FCStd` | CAM workbench (`Path::FeaturePython`) |
+| `InvoluteGear_v0-20.FCStd`, `InternalInvoluteGear_v0-20.FCStd` | Only `Part::Part2DObjectPython` extension; no tier-recognised operations to translate |
+
+**Unreadable (4):**
+
+`macro_template.FCStd`, `missing_macro_metadata.FCStd`, `good_macro_metadata.FCStd`, `bad_macro_metadata.FCStd` — all from `Mod/AddonManager/AddonManagerTest/data/`, all fail to open with "Invalid project file" (they are intentionally malformed test stubs for the AddonManager).
+
+**Critical gaps in the bundled set:**
+
+- **Tier 1** (primitives beyond Box): only EngineBlock's nested Box/Cylinder uses; no standalone Cylinder/Sphere/Cone/Torus fixtures.
+- **Tier 3** (fillets/chamfers): none — this is the tier where topological naming bites and where ADR-0001's FreeCAD-runtime decision is validated. Most important gap.
+- **Tier 6** (spreadsheet-driven): none — this is the killer test for the named-variable-preservation promise.
+
+These gaps are filled by `tools/synthesize_fixtures.py`, which generates 7 minimal fixtures programmatically.
+
+### 12.2 Top 10 selected fixtures
+
+| # | Fixture path | Tier | Provenance | Why it earned a slot |
+|---|---|---|---|---|
+| 1 | `tier1_primitives/box_10x20x30` | 1 | synthetic | Distinct dimensions ⇒ distinct principal MOI eigenvalues; catches wrong eigenvalue ordering. |
+| 2 | `tier1_primitives/cylinder_r10_h30` | 1 | synthetic | Round geometry; MOI has axial symmetry (two eigenvalues equal). |
+| 3 | `tier1_primitives/sphere_r15` | 1 | synthetic | Maximally symmetric — all three principal MOI equal. Cheapest invariant check. |
+| 4 | `tier1_primitives/cone_r10_r5_h20` | 1 | synthetic | Non-trivial COM (off-center along the axis). |
+| 5 | `tier1_primitives/torus_R20_r5` | 1 | synthetic | Genus-1 topology — exercises BRep paths beyond simple solids. |
+| 6 | `tier2_partdesign/simple_pad` | 2 | synthetic | Smallest possible Body + Sketch + Pad. Minimal regression case. |
+| 7 | `tier2_partdesign/partdesign_example` | 2 | bundled (LGPL) | Canonical FreeCAD example: 1 Pad + 3 Pockets, 57 sketch constraints. Realistic structure. |
+| 8 | `tier3_filletchamfer/box_with_fillet` | 3 | synthetic | **The critical test for ADR-0001.** A Pad whose four vertical edges (referenced by OCCT internal names like `Edge8`) are filleted at radius 3. Validates topological-naming resolution. |
+| 9 | `tier4_patterns/drilled_plate` | 4 | bundled (LGPL) | Sourced from `Drilling_1.FCStd` (renamed). LinearPattern + PolarPattern + dense hole geometry. |
+| 10 | `tier6_parametric/spreadsheet_box` | 6 | synthetic | A `Part::Box` whose Length/Width/Height are bound via `setExpression` to a Spreadsheet's `width`/`depth`/`height` aliases. Proves the ExpressionEngine round-trips through save/load; the translator must emit these as named Python variables. |
+
+### 12.3 Tier coverage and deliberate omissions
+
+Top 10 covers tiers 1, 2, 3, 4, 6. Deferred:
+
+- **Tier 5** (boolean ops between bodies): `EngineBlock.FCStd` was the obvious candidate but was bumped in favour of tier-3 fillet coverage. Tier 3 validates ADR-0001 (the central architectural decision); tier 5 doesn't. Add EngineBlock when the translator handles Boolean ops.
+- **Tier 7** (substantial Parts Library designs): the FreeCAD Parts Library is a separate repo of CC-BY 3.0 parts. Pulling a curated subset is a meaningful undertaking — best done after the simpler tiers work end-to-end through an actual translator.
+
+### 12.4 Provenance and license
+
+| Source | License | Count |
+|---|---|---|
+| Synthetic via `tools/synthesize_fixtures.py` | Same as project | 7 |
+| FreeCAD 1.0 `share/examples/` | LGPL-2+ | 1 (`partdesign_example`) |
+| FreeCAD 1.0 `Mod/CAM/CAMTests/` | LGPL-2+ | 1 (`drilled_plate`) |
+
+The two bundled fixtures are derivative works of FreeCAD and inherit LGPL-2+. As long as the test suite ships with appropriate attribution, redistribution is fine for an open-source project.
+
+### 12.5 Regenerating
+
+Synthetic fixtures:
+```bash
+PYTHONPATH=.conda/envs/freecad/lib \
+  .conda/bin/micromamba run -n freecad \
+  python tools/synthesize_fixtures.py
+```
+
+Snapshots (all fixtures):
+```bash
+for f in $(find tests/fixtures -name "*.FCStd"); do
+  PYTHONPATH=.conda/envs/freecad/lib \
+    .conda/bin/micromamba run -n freecad \
+    python tests/snapshot.py "$f"
+done
+```
+
+Bundled fixtures: copy from `.conda/envs/freecad/share/examples/` (or `Mod/.../`) into the appropriate `tests/fixtures/tierN_*/` directory.
