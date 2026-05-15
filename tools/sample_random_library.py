@@ -39,13 +39,19 @@ def safe_stem(rel_path: str) -> str:
 
 
 def build_existing_map(fixtures_root: Path) -> dict[str, tuple[str, str]]:
-    """Map source_path → (corpus_dir, fixture_stem) across all manifests."""
+    """Map source_path → (corpus_dir, fixture_stem) across all manifests.
+
+    Skip entries that have no ``fixture_stem`` (those came from a prior
+    sample run where the fixture itself was a cached reference rather than
+    a freshly-copied source file).
+    """
     m: dict[str, tuple[str, str]] = {}
     for manifest in fixtures_root.glob("*/manifest.json"):
         for fx in json.loads(manifest.read_text()):
             src = fx.get("source_path")
-            if src:
-                m[src] = (manifest.parent.name, fx["fixture_stem"])
+            stem = fx.get("fixture_stem")
+            if src and stem:
+                m[src] = (manifest.parent.name, stem)
     return m
 
 
