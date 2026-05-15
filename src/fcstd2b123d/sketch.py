@@ -450,8 +450,14 @@ def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
 
     plane = _plane_expr(sketch.Placement)
     if plane is not None:
+        # Wrap with ``Sketch() + ...`` so mypy can resolve the type. The bare
+        # ``Plane * <face>`` operator's stub returns a union including Plane
+        # itself, which downstream extrude/revolve calls then reject under
+        # strict typing -- even though the runtime result is a Sketch. Adding
+        # ``Sketch() +`` produces the same geometry and types correctly.
         imports.add("Plane")
-        full_expr = f"{plane} * ({face_expr})"
+        imports.add("Sketch")
+        full_expr = f"Sketch() + {plane} * ({face_expr})"
     else:
         full_expr = face_expr
 
