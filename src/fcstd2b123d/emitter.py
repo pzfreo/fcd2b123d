@@ -122,6 +122,20 @@ except NameError:
         for s in removals:
             add(s, mode=Mode.SUBTRACT)
     return _bp.part""",
+    "_pattern_intersection": """def _pattern_intersection(base, *others):
+    \"\"\"Boolean-intersect ``base`` with each other shape via BuildPart.
+
+    Used by Part::Common / Part::MultiCommon translation. The ``&``
+    operator returns a Compound that doesn't always behave correctly for
+    multi-shape intersections; BuildPart with Mode.INTERSECT routes
+    through OCCT's robust intersection.
+    \"\"\"
+    from build123d import BuildPart, Mode, add
+    with BuildPart() as _bp:
+        add(base)
+        for s in others:
+            add(s, mode=Mode.INTERSECT)
+    return _bp.part""",
 }
 
 

@@ -18,11 +18,17 @@ from .parametric import extract_parameters
 from .partdesign import TIER2_HANDLERS
 from .primitives import TIER1_HANDLERS
 from .shape_import import SHAPE_IMPORT_HANDLERS
+from .tier5_boolean import TIER5_BOOLEAN_HANDLERS
 
 # Single dispatch table across all tiers. SHAPE_IMPORT_HANDLERS is the
 # graceful-degradation path for Part::Feature and FeaturePython objects
 # whose parametric history we can't translate — see SPEC §13.5.
-HANDLERS = {**TIER1_HANDLERS, **TIER2_HANDLERS, **SHAPE_IMPORT_HANDLERS}
+HANDLERS = {
+    **TIER1_HANDLERS,
+    **TIER2_HANDLERS,
+    **TIER5_BOOLEAN_HANDLERS,
+    **SHAPE_IMPORT_HANDLERS,
+}
 
 # Document-level infrastructure types — appear in valid documents but carry
 # no translatable content. Silently skipped at the top level.

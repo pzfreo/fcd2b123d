@@ -37,16 +37,14 @@ def _is_any_string(*values) -> bool:
 
 # build123d names we import into the translated module. A FreeCAD object's
 # Name will sometimes match one of these (e.g. an unrenamed Part::Cone is
-# called "Cone"). Suffixing avoids `Cone = Pos(...) * Cone(...)` shadowing
-# the class.
-_BUILD123D_RESERVED = frozenset({
-    "Box", "Cylinder", "Sphere", "Cone", "Torus",
-    "Pos", "Rot", "Loc", "Plane", "Axis",
-})
+# (Previously suffixed names like ``Cone_`` to avoid shadowing the build123d
+# class. The snake_case post-pass in emitter.py now handles this -- the
+# variable becomes ``cone`` (lowercase) which coexists with ``Cone`` (the
+# class) since Python is case-sensitive. So _safe_var is just a passthrough.)
 
 
 def _safe_var(name: str) -> str:
-    return name + "_" if name in _BUILD123D_RESERVED else name
+    return name
 
 
 # Tolerance for treating a Placement rotation as identity. FreeCAD stores
