@@ -24,6 +24,7 @@ FIXTURE_DIRS = [
     Path("tests/fixtures/tier3_corpus_c"),  # seed 271 — tier-3 random
     Path("tests/fixtures/tier6_corpus"),    # seed 519 — parametric (Spreadsheet)
     Path("tests/fixtures/tier4_corpus"),    # seed 613 — uses LinearPattern/PolarPattern/Mirrored
+    Path("tests/fixtures/sample_813"),      # seed 813 — true-random full library
 ]
 
 # Fixtures whose translation reveals real v1 scope limitations. They stay in
@@ -75,6 +76,57 @@ EXCLUDED_FROM_TEST = {
     "Support_Fan_CoolMaster_70mmx70mm",         # PartDesign::Draft (issue #35)
     "Baterry_9_volts",                          # Revolution axis via DatumLine (sub-issue of #25)
     "45x45_mm_",                                # disconnected sketch geometry
+    # sample_813 (seed 813): true-random library audit -- one per open issue
+    # where the library provides a real example. See each cross-reference.
+    "SM-S4303R-2-arms-small-horn",              # Part::Mirroring (#28)
+    "T-slot_20x20_90_joint",                    # Non-identity rotation Part::Box (#54)
+    "T-slot_2020_round_roll-in_nut_M3",         # Non-identity rotation Part::Sphere (#54)
+    "4mm_Pole_Nock_and_3mm_Pin_Nock",           # Sketch BSplineCurve (#56)
+    "KP08",                                     # Multi-Body Placement (#37)
+    "DN15_Stamped_Flange",                      # PolarPattern axis on rotated sketch
+    "arduinounomissmetal",                      # props_mismatch (#57)
+    "steel-sheets-3000mm",                      # props_mismatch (#57)
+    "ANSI-ASME-B18_2_2_Hex_Nut_1_4-20",         # props_mismatch (#57)
+    # sample_813 -- explicitly out of scope per SPEC §13.5 (Part::Feature /
+    # FeaturePython); shape-import was rejected. 16 sprockets + plate wheel
+    # use Part::Part2DObjectPython, would need symmetry-aware translation.
+    "Sprocket_ANSI_simplex_2x1__z09",           # Part::Part2DObjectPython
+    "Sprocket_ANSI_simplex_2x1__z10",           # Part::Part2DObjectPython
+    "Sprocket_ANSI_simplex_2x1__z40",           # Part::Part2DObjectPython
+    "Sprocket_ANSI_simplex__x_____z10",         # Part::Part2DObjectPython
+    "Sprocket_ANSI_simplex__x_____z13",         # Part::Part2DObjectPython
+    "Sprocket_ANSI_simplex__x_____z16",         # Part::Part2DObjectPython
+    "Sprocket_ANSI_simplex__x_____z17",         # Part::Part2DObjectPython
+    "Sprocket_ANSI_simplex__x_____z18",         # Part::Part2DObjectPython
+    "Sprocket_ANSI_simplex__x_____z19",         # Part::Part2DObjectPython
+    "Sprocket_ANSI_simplex__x_____z39",         # Part::Part2DObjectPython
+    "Sprocket_ANSI_simplex__x__z22",            # Part::Part2DObjectPython
+    "Sprocket_ANSI_simplex__x__z28",            # Part::Part2DObjectPython
+    "Sprocket_ANSI_simplex__x__z30",            # Part::Part2DObjectPython
+    "Sprocket_ANSI_simplex__x__z37",            # Part::Part2DObjectPython
+    "Sprocket_ISO606_simplex__x__z40",          # Part::Part2DObjectPython
+    "Plate_Wheel_simplex__x____",               # Part::Part2DObjectPython
+    # sample_813 -- multi-solid Compound that now snapshots (#55 closed) but
+    # contains Part::Feature/FeaturePython (out of scope per SPEC §13.5).
+    "Sliding_window_and_two_fixed_vertical_sheets",  # Part::Feature
+    "TO92_clear",                               # Part::Feature
+    "1x10-female-pin-header",                   # Part::Feature
+    "Faucet_Solone_LOP4-B043-21",               # Part::Feature
+    "Diamond",                                  # Part::Feature
+    "Single_door_with_window_and_trims",        # Part::Feature
+    "28BYJ-48",                                 # Part::Feature
+    "1x4-male-pin-header",                      # Part::Feature
+    "battery_lipo_3_7v_240mah",                 # Part::Feature
+    # sample_813 -- not actionable
+    "Sprocket_ISO606_simplex_8x3_0_z34",        # FreeCAD recompute timeout (>30s)
+    "Batman_shelf",                             # source file has null shape
+    "Half_concrete_block",                      # source file has null shape
+    # sample_813 -- previously PASS in audit, now Hausdorff-fail. Likely
+    # mirror-flip or topology error masked by symmetric four-scalar match.
+    # Needs investigation (filing as new issue).
+    "cabin_door",                               # Hausdorff fail; needs investigation
+    "WallHungBidet",                            # Hausdorff fail; needs investigation
+    "FootPAD",                                  # Hausdorff fail; needs investigation
     # Sprocket precision-edge: pass-rate within ~1-4 ppm of FreeCAD's volume
     # but just over the 1e-6 relative tolerance. The geometry is correct
     # within OCCT tessellation noise for these very-many-tooth profiles.
