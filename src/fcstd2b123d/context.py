@@ -22,6 +22,10 @@ class TranslationContext:
     source_path: Path
     freecad_version: str | None = None
     steps: list[dict] = field(default_factory=list)
+    # Tier-6 parametric data: populated by translator before handlers run.
+    # ParameterSet is intentionally typed as Any here to keep this module
+    # free of the FreeCAD-aware parametric module's imports.
+    parameters: object | None = None
 
     def add_step(
         self,
