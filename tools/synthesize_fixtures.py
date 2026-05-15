@@ -120,6 +120,37 @@ def make_pad_twolengths(out: Path) -> None:
     _save(doc, out / "tier2_partdesign/pad_twolengths.FCStd")
 
 
+def make_pad_with_bspline(out: Path) -> None:
+    """Tear-drop profile (line + line + BSpline) padded — #56 BSpline support.
+
+    Two straight edges down the long axis form a 'V' from (0,0) to (10,5)
+    and back to (10,-5); a degree-2 B-spline from (10,-5) through (15,0)
+    to (10,5) closes the loop with a smooth curved end.
+    """
+    doc = FreeCAD.newDocument("padbsp")
+    body = doc.addObject("PartDesign::Body", "Body")
+    sketch = body.newObject("Sketcher::SketchObject", "Profile")
+    sketch.AttachmentSupport = (body.Origin.OutList[3], [""])
+    sketch.MapMode = "FlatFace"
+    v = FreeCAD.Vector
+    # Two straight edges forming a V opening to +X.
+    sketch.addGeometry(Part.LineSegment(v(0, 0, 0), v(10, 5, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(10, -5, 0), v(0, 0, 0)), False)
+    # Degree-2 (quadratic) B-spline closing the V on the +X side.
+    poles = [v(10, 5, 0), v(20, 0, 0), v(10, -5, 0)]
+    bsp = Part.BSplineCurve()
+    bsp.buildFromPoles(poles, False, 2)  # not periodic, degree 2
+    sketch.addGeometry(bsp, False)
+    # Endpoint coincidence so the chain closes.
+    sketch.addConstraint(Sketcher.Constraint("Coincident", 0, 2, 2, 1))
+    sketch.addConstraint(Sketcher.Constraint("Coincident", 2, 2, 1, 1))
+    sketch.addConstraint(Sketcher.Constraint("Coincident", 1, 2, 0, 1))
+    pad = body.newObject("PartDesign::Pad", "Pad")
+    pad.Profile = sketch
+    pad.Length = 4
+    _save(doc, out / "tier2_partdesign/pad_with_bspline.FCStd")
+
+
 # --- Tier 3: Pad + Fillet (the topological-naming test) ---
 
 def make_box_with_fillet(out: Path) -> None:
@@ -316,6 +347,7 @@ def main() -> None:
     make_torus(args.out)
     make_simple_pad(args.out)
     make_pad_twolengths(args.out)
+    make_pad_with_bspline(args.out)
     make_box_with_fillet(args.out)
     make_linear_pattern_holes(args.out)
     make_polar_pattern_holes(args.out)
