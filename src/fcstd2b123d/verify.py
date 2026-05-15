@@ -1,7 +1,10 @@
 """Build123d-side property extraction and comparison.
 
-Used at test time. Imports build123d / OCP — not safe to import from any code
-path that needs to run in environments without those libraries.
+Used at test time and by the ``fcstd2b123d-verify`` CLI. Imports build123d /
+OCP — not safe to import from any code path that needs to run in
+environments without those libraries. (All build123d/OCP imports are lazy
+inside the functions that need them, so importing this module itself is
+cheap and side-effect-free.)
 """
 
 from __future__ import annotations
@@ -171,7 +174,7 @@ def _assert_hausdorff(part, pointcloud_path, expected: Properties) -> None:
     """
     import json
 
-    from tests.utils.hausdorff import bbox_diagonal, hausdorff_distance
+    from .hausdorff import bbox_diagonal, hausdorff_distance
 
     p = Path(pointcloud_path)
     if not p.exists():

@@ -1,6 +1,6 @@
 """Schema round-trip tests for Properties. No build123d or FreeCAD required."""
 
-from tests.utils.properties import Properties
+from fcstd2b123d.properties import Properties
 
 
 def _props(**kw):

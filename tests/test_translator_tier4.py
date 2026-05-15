@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 
 from tests.test_translator_tier1 import _translate
-from tests.utils.compare import assert_equivalent, extract_build123d
-from tests.utils.properties import Properties
+from fcstd2b123d.verify import assert_equivalent, extract_build123d
+from fcstd2b123d.properties import Properties
 
 FIXTURE_DIR = Path("tests/fixtures/tier4_patterns")
 

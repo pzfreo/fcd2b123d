@@ -25,8 +25,8 @@ from pathlib import Path
 
 import pytest
 
-from tests.utils.compare import assert_equivalent, extract_build123d
-from tests.utils.properties import Properties
+from fcstd2b123d.verify import assert_equivalent, extract_build123d
+from fcstd2b123d.properties import Properties
 
 
 FIXTURE_ROOT = Path("tests/fixtures")

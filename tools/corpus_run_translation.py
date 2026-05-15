@@ -18,8 +18,8 @@ from pathlib import Path
 
 # Make tests/utils importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from tests.utils.compare import compare, extract_build123d
-from tests.utils.properties import Properties
+from fcstd2b123d.verify import compare, extract_build123d
+from fcstd2b123d.properties import Properties
 
 
 def translate(fcstd: Path) -> tuple[int, str, str]:
