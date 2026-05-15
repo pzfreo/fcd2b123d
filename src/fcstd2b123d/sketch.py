@@ -170,27 +170,64 @@ def _emit_arc(g, reverse: bool) -> str:
     )
 
 
-def _emit_chain_loop(chain: list) -> tuple[str, set[str]]:
-    """Render a closed chain of (geom, reversed) entries as a build123d face expression."""
-    edges_expr = []
-    imports: set[str] = {"Line"}
-    for g, rev in chain:
-        kind = type(g).__name__
+def _emit_chain_curve(chain: list) -> tuple[str, set[str]]:
+    """Render a closed chain of (geom, reversed) entries as a 1D curve expression.
+
+    Returns the inner curve expression (e.g. ``Polyline(...) + CenterArc(...)``)
+    *without* the ``make_face`` wrapper, so the caller can hoist it to a
+    named variable for first-class 1D inspection per the build123d algebra
+    style.
+
+    Runs of ≥ 2 consecutive ``LineSegment`` edges collapse into a single
+    ``Polyline``: ``Line((a,b),(c,d)) + Line((c,d),(e,f))`` becomes
+    ``Polyline((a,b),(c,d),(e,f))``. Single isolated segments stay as
+    ``Line(...)``.
+    """
+    edges_expr: list[str] = []
+    imports: set[str] = set()
+    i = 0
+    n = len(chain)
+    while i < n:
+        kind = type(chain[i][0]).__name__
         if kind == "LineSegment":
-            s, e = _segment_endpoints(g)
-            if rev:
-                s, e = e, s
-            edges_expr.append(_emit_line(s, e))
+            run_start = i
+            while i < n and type(chain[i][0]).__name__ == "LineSegment":
+                i += 1
+            run = chain[run_start:i]
+            if len(run) >= 2:
+                s0, e0 = _segment_endpoints(run[0][0])
+                if run[0][1]:
+                    s0, e0 = e0, s0
+                points: list[tuple[float, float]] = [s0]
+                for g, rev in run:
+                    s, e = _segment_endpoints(g)
+                    if rev:
+                        s, e = e, s
+                    points.append(e)
+                edges_expr.append(_emit_polyline(points))
+                imports.add("Polyline")
+            else:
+                s, e = _segment_endpoints(run[0][0])
+                if run[0][1]:
+                    s, e = e, s
+                edges_expr.append(_emit_line(s, e))
+                imports.add("Line")
         elif kind == "ArcOfCircle":
-            edges_expr.append(_emit_arc(g, rev))
+            edges_expr.append(_emit_arc(chain[i][0], chain[i][1]))
             imports.add("CenterArc")
+            i += 1
         else:
             raise UnsupportedFeatureError(
                 "Sketcher::SketchObject",
                 f"(unsupported geometry kind {kind!r} in loop)",
             )
-    expr = " + ".join(edges_expr)
-    return f"make_face({expr})", imports | {"make_face"}
+    return " + ".join(edges_expr), imports
+
+
+def _emit_polyline(points: list[tuple[float, float]]) -> str:
+    """Emit a Polyline with the given 2D points."""
+    pts = ", ".join(f"({_fmt(x)}, {_fmt(y)})" for x, y in points)
+    return f"Polyline({pts})"
 
 
 def _emit_circle(g) -> tuple[str, set[str]]:
@@ -331,16 +368,19 @@ def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
     edge_loops = _chain_loops(chainable) if chainable else []
 
     # Uniform loop list with area, interior point, containment test, and
-    # emitted expression.
+    # emitted expression. ``curve_expr`` (when present) is the 1D curve
+    # composition that will be hoisted to a named variable; ``expr`` is the
+    # final per-loop face expression used in the face composition below.
     loops: list[dict] = []
     for chain in edge_loops:
-        expr, imp = _emit_chain_loop(chain)
+        curve_expr, imp = _emit_chain_curve(chain)
         loops.append({
             "area": _chain_area(chain),
             "interior": _interior_point_of_chain(chain),
             "contains": lambda p, c=chain: _chain_contains_point(c, p),
-            "expr": expr,
-            "imports": imp,
+            "curve_expr": curve_expr,
+            "expr": None,  # filled in once we know the hoisted variable name
+            "imports": imp | {"make_face"},
         })
     for c in circles:
         expr, imp = _emit_circle(c)
@@ -348,6 +388,7 @@ def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
             "area": _circle_area(c),
             "interior": _interior_point_of_circle(c),
             "contains": lambda p, c=c: _circle_contains_point(c, p),
+            "curve_expr": None,
             "expr": expr,
             "imports": imp,
         })
@@ -380,6 +421,25 @@ def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
         )
 
     var = sketch.Name
+
+    # Hoist each chain-loop's 1D curve into its own named variable, then
+    # wrap with make_face for the face composition. Circles already produce
+    # closed faces directly and stay inline.
+    pre_lines: list[str] = []
+    chain_loops = [L for L in loops if L["curve_expr"] is not None]
+    if len(chain_loops) == 1:
+        # Single chain loop — name it ``<sketch>_profile`` for readability.
+        L = chain_loops[0]
+        curve_var = f"{var}_profile"
+        pre_lines.append(f"{curve_var} = {L['curve_expr']}")
+        L["expr"] = f"make_face({curve_var})"
+    else:
+        # Multiple chain loops — disambiguate by index.
+        for i, L in enumerate(chain_loops):
+            curve_var = f"{var}_loop_{i}"
+            pre_lines.append(f"{curve_var} = {L['curve_expr']}")
+            L["expr"] = f"make_face({curve_var})"
+
     pos_expr = " + ".join(L["expr"] for L in positives)
     if len(positives) > 1:
         pos_expr = f"({pos_expr})"
@@ -410,7 +470,7 @@ def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
     unit = TranslationUnit(
         var_name=var,
         imports=imports,
-        lines=[f"{var} = {full_expr}"],
+        lines=[*pre_lines, f"{var} = {full_expr}"],
         comment=f"Sketcher::SketchObject {sketch.Label!r}: {summary} ({len(loops)} loops)",
     )
     ctx.add_step(

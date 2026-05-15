@@ -7,6 +7,7 @@ clean .py source.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -185,7 +186,7 @@ def render_module(
         + helper_block
         + _assemble_body(body_lines, final_var, used_params)
     )
-    return _format(raw)
+    return _format(_snake_case_pass(raw))
 
 
 def _assemble_body(
@@ -220,3 +221,77 @@ def _format(source: str) -> str:
     import black
 
     return black.format_str(source, mode=black.FileMode())
+
+
+# Build123d names that would shadow if a translated variable adopts the same
+# snake_case identifier. When a FreeCAD object name like "Fillet" maps to
+# "fillet" and that's the imported function, the variable is suffixed "_0"
+# so subsequent calls to the function still resolve correctly.
+_B123D_FUNCTION_IMPORTS = frozenset({
+    "extrude", "revolve", "fillet", "chamfer", "mirror", "make_face",
+    "add", "loft", "sweep",
+})
+
+
+_PASCAL_RE = re.compile(r"([a-z])([A-Z])")
+_TRAILING_DIGITS_RE = re.compile(r"([a-zA-Z])(\d+)")
+_ASSIGN_TARGET_RE = re.compile(r"^[ \t]*([A-Z][A-Za-z0-9_]*)\s*=", re.MULTILINE)
+
+
+def _snake_case(freecad_name: str) -> str:
+    """Convert a FreeCAD PascalCase identifier to Python snake_case.
+
+    Examples:
+        Sketch         -> sketch
+        Sketch001      -> sketch_001  (preserves the FreeCAD ordinal padding)
+        Pad            -> pad
+        LinearPattern  -> linear_pattern
+        Fillet001      -> fillet_001
+    """
+    s = _PASCAL_RE.sub(r"\1_\2", freecad_name)
+    s = _TRAILING_DIGITS_RE.sub(r"\1_\2", s)
+    return s.lower()
+
+
+def _snake_case_pass(source: str) -> str:
+    """Post-pass: rename PascalCase variables to snake_case throughout source.
+
+    Collects every assignment target whose identifier starts with an uppercase
+    letter (FreeCAD's auto-naming convention). Builds a rename map with
+    collision-avoidance against build123d's imported function names, then
+    replaces word-boundary occurrences on non-comment, non-docstring lines so
+    the per-feature comment retains the original FreeCAD label for grep-back.
+    """
+    targets: set[str] = set()
+    for line in source.split("\n"):
+        stripped = line.lstrip()
+        if stripped.startswith("#") or stripped.startswith('"""'):
+            continue
+        m = _ASSIGN_TARGET_RE.match(line)
+        if m:
+            targets.add(m.group(1))
+    if not targets:
+        return source
+
+    rename: dict[str, str] = {}
+    for t in targets:
+        snake = _snake_case(t)
+        if snake in _B123D_FUNCTION_IMPORTS:
+            snake = snake + "_0"
+        # Pathological: two FreeCAD names mapping to the same snake form.
+        # Disambiguate by appending an underscore until unique.
+        while snake in rename.values():
+            snake = snake + "_"
+        rename[t] = snake
+
+    out_lines: list[str] = []
+    for line in source.split("\n"):
+        stripped = line.lstrip()
+        if stripped.startswith("#") or stripped.startswith('"""'):
+            out_lines.append(line)
+            continue
+        new = line
+        for orig, snake in rename.items():
+            new = re.sub(r"\b" + re.escape(orig) + r"\b", snake, new)
+        out_lines.append(new)
+    return "\n".join(out_lines)
