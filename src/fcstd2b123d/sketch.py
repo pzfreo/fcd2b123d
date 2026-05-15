@@ -300,9 +300,22 @@ def _circle_area(g) -> float:
 _SUPPORTED_KINDS = {"LineSegment", "Circle", "ArcOfCircle"}
 
 
+def _is_construction(sketch, idx: int) -> bool:
+    """FreeCAD's Sketcher marks reference-only geometry as 'construction' —
+    it must not contribute to the resulting face."""
+    try:
+        return bool(sketch.getConstruction(idx))
+    except Exception:
+        return False
+
+
 def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
+    geometry = [
+        (i, g) for i, g in enumerate(sketch.Geometry)
+        if not _is_construction(sketch, i)
+    ]
     unsupported_kinds = {
-        type(g).__name__ for g in sketch.Geometry
+        type(g).__name__ for _i, g in geometry
     } - _SUPPORTED_KINDS
     if unsupported_kinds:
         raise UnsupportedFeatureError(
@@ -310,9 +323,10 @@ def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
             f"{sketch.Label} (unsupported geometry kinds: {sorted(unsupported_kinds)})",
         )
 
-    circles = [g for g in sketch.Geometry if type(g).__name__ == "Circle"]
+    circles = [g for _i, g in geometry if type(g).__name__ == "Circle"]
     chainable = [
-        g for g in sketch.Geometry if type(g).__name__ in {"LineSegment", "ArcOfCircle"}
+        g for _i, g in geometry
+        if type(g).__name__ in {"LineSegment", "ArcOfCircle"}
     ]
 
     if not circles and not chainable:

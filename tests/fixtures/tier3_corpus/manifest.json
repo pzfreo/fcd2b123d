@@ -1,0 +1,302 @@
+[
+  {
+    "fixture_stem": "Square_hollow_section_220x220x12_EN10219_S235JRH",
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Square Hollow Sections/Square hollow section 220x220x12 EN10219 S235JRH.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "U_1_1s8CloseMean",
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Unified/Close/U_1_1s8/U_1_1s8CloseMean.FCStd",
+    "max_tier": 1,
+    "object_count": 1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "ISO7091DIN126_CLASS_C_M64FlatWasher",
+    "source_path": "Mechanical Parts/Fasteners/Washers/Metric/ISO7091DIN126_CLASS_C_M64FlatWasher.fcstd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Angle_Bar_L55x55x5_EN10056_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10056 Equal Angle Bars/Angle Bar L55x55x5 EN10056 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "ANSI-ASME-B18_2_1_Hex_Head_Cap_Screw_1_4-20x1",
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Unified/ANSI-ASME-B18.2.1_Hex_Head_Cap_Screw_1_4-20x1.fcstd",
+    "max_tier": 3,
+    "object_count": 5,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "M48LooseMin",
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Metric/Loose/M48/M48LooseMin.FCStd",
+    "max_tier": 1,
+    "object_count": 1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "M5CloseMin",
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Metric/Close/M5/M5CloseMin.FCStd",
+    "max_tier": 1,
+    "object_count": 1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "U_1_1s4LooseMean",
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Unified/Loose/U_1_1s4/U_1_1s4LooseMean.FCStd",
+    "max_tier": 1,
+    "object_count": 1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Angle_Bar_L200x200x18_EN10056_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10056 Equal Angle Bars/Angle Bar L200x200x18 EN10056 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "U_7s8NormalMax",
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Unified/Normal/U_7s8/U_7s8NormalMax.FCStd",
+    "max_tier": 1,
+    "object_count": 1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Square_hollow_section_60x60x3_2_EN10219_S235JRH",
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Square Hollow Sections/Square hollow section 60x60x3.2 EN10219 S235JRH.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Angle_Bar_L30x30x4_EN10056_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10056 Equal Angle Bars/Angle Bar L30x30x4 EN10056 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Round_Bar_90_EN10060_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10060 Round steel bars/Round Bar 90 EN10060 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Flat_Bar_120x60_EN10058_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10058 Flat steel bars/Flat Bar 120x60 EN10058 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "U_1_3s8NormalMax",
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Unified/Normal/U_1_3s8/U_1_3s8NormalMax.FCStd",
+    "max_tier": 1,
+    "object_count": 1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Flat_Bar_30x5_EN10058_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10058 Flat steel bars/Flat Bar 30x5 EN10058 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Screw_M42x120_ISO4762_8_8_A2K",
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M42x120 ISO4762 8,8 A2K.FCStd",
+    "max_tier": 2,
+    "object_count": 4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "ISO7093DIN9021_M10FlatWasher",
+    "source_path": "Mechanical Parts/Fasteners/Washers/Metric/ISO7093DIN9021_M10FlatWasher.fcstd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "ISO7093DIN9021_M5FlatWasher",
+    "source_path": "Mechanical Parts/Fasteners/Washers/Metric/ISO7093DIN9021_M5FlatWasher.fcstd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "U_7s16NormalMean",
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Unified/Normal/U_7s16/U_7s16NormalMean.FCStd",
+    "max_tier": 1,
+    "object_count": 1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "M8CloseMin",
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Metric/Close/M8/M8CloseMin.FCStd",
+    "max_tier": 1,
+    "object_count": 1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "M72CloseMin",
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Metric/Close/M72/M72CloseMin.FCStd",
+    "max_tier": 1,
+    "object_count": 1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Angle_Bar_100x50x6_EN10056_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10056 Unequal Angle Bars/Angle Bar 100x50x6 EN10056 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Flat_Bar_55x10_EN10058_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10058 Flat steel bars/Flat Bar 55x10 EN10058 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "ISO7093DIN9021_M30FlatWasher",
+    "source_path": "Mechanical Parts/Fasteners/Washers/Metric/ISO7093DIN9021_M30FlatWasher.fcstd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Flat_Bar_20x12_EN10058_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10058 Flat steel bars/Flat Bar 20x12 EN10058 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "M24NormalMean",
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Metric/Normal/M24/M24NormalMean.FCStd",
+    "max_tier": 1,
+    "object_count": 1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "UPE-Profile_100_DIN1026-2_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/DIN1026-2 UPE-Profiles/UPE-Profile 100 DIN1026-2 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Square_hollow_section_120x120x5_EN10219_S235JRH",
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Square Hollow Sections/Square hollow section 120x120x5 EN10219 S235JRH.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Square_Bar_75_EN10059_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10059 Square steel bars/Square Bar 75 EN10059 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  }
+]

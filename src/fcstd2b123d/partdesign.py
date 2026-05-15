@@ -466,11 +466,302 @@ def _translate_chamfer(
     return _dressup_unit(cha, base_var, "chamfer", "Size", ctx, "chamfer")
 
 
+# ---------------------------------------------------------------------------
+# Top-level atomic handlers (Body-less legacy PartDesign + Part-workbench
+# equivalents). The Parts Library has many old files where PartDesign features
+# live directly in the document without a containing Body.
+# ---------------------------------------------------------------------------
+
+
+def _previous_solid_in_doc(obj) -> str | None:
+    """Find the most recent solid-producing object before obj in doc order.
+
+    Body-less PartDesign files don't always set ``BaseFeature`` on Pockets,
+    leaving "what does this subtract from?" implicit. The convention is "the
+    previous solid in the document" — that's what FreeCAD's old-format
+    importer assumes.
+    """
+    doc = obj.Document
+    prev: str | None = None
+    for o in doc.Objects:
+        if o.Name == obj.Name:
+            return prev
+        try:
+            shape = getattr(o, "Shape", None)
+            if shape is not None and not shape.isNull() and shape.Solids:
+                prev = o.Name
+        except Exception:
+            pass
+    return None
+
+
+def _translate_atomic_pad(pad, ctx: TranslationContext) -> list[TranslationUnit]:
+    return [_translate_pad(pad, ctx)]
+
+
+def _translate_atomic_pocket(pocket, ctx: TranslationContext) -> list[TranslationUnit]:
+    """A Pocket outside a Body. FreeCAD's actual behaviour for this legacy
+    case is to *not* subtract — Pocket.Shape is just the extruded profile,
+    same as a Pad. The "subtract from running body" semantic only applies
+    inside a PartDesign::Body.
+
+    See the M42 screw corpus fixture: its body-less Pocket has Shape = hex
+    prism (not the bolt-with-hex-socket the designer presumably wanted).
+    """
+    pocket_type = str(getattr(pocket, "Type", "Length"))
+    if pocket_type not in {"Length", "ThroughAll"}:
+        raise UnsupportedFeatureError(
+            pocket.TypeId,
+            f"{pocket.Label} (atomic Pocket.Type={pocket_type!r}; tier-2 atomic "
+            f"Pocket only supports 'Length' and 'ThroughAll')",
+        )
+
+    profile = pocket.Profile
+    if isinstance(profile, (list, tuple)):
+        profile = profile[0]
+    sketch_var = profile.Name
+    reversed_ = bool(getattr(pocket, "Reversed", False))
+
+    if pocket_type == "ThroughAll":
+        # Body-less ThroughAll Pocket: FreeCAD subtracts from the previous
+        # solid in document order (the only way "through-all" makes sense
+        # without a Body to be "through"). The ANSI hex cap screw fixture
+        # exhibits this — Pocket.Shape = Revolution - hex carve.
+        base_var = _previous_solid_in_doc(pocket)
+        if base_var is None:
+            raise UnsupportedFeatureError(
+                pocket.TypeId,
+                f"{pocket.Label} (atomic ThroughAll Pocket with no previous solid)",
+            )
+        length = _THROUGH_ALL_LENGTH
+        amount = length if reversed_ else -length
+        unit = TranslationUnit(
+            var_name=pocket.Name,
+            imports={"extrude"},
+            lines=[
+                f"{pocket.Name} = {base_var} - extrude({sketch_var}, amount={amount})"
+            ],
+            comment=f"PartDesign::Pocket {pocket.Label!r} (body-less, ThroughAll)"
+                    + (" reversed" if reversed_ else ""),
+        )
+        deps = [base_var, sketch_var]
+    else:
+        # Body-less Length Pocket: FreeCAD produces just the extruded profile
+        # (the prismatic shape), no subtraction. Direction is -normal by
+        # default (matching the body-internal "cut into the body" convention).
+        length = float(pocket.Length.Value)
+        amount = length if reversed_ else -length
+        unit = TranslationUnit(
+            var_name=pocket.Name,
+            imports={"extrude"},
+            lines=[f"{pocket.Name} = extrude({sketch_var}, amount={amount})"],
+            comment=f"PartDesign::Pocket {pocket.Label!r} (body-less): length={length}"
+                    + (" (reversed)" if reversed_ else ""),
+        )
+        deps = [sketch_var]
+
+    ctx.add_step(
+        feature_type="pocket",
+        feature_name=pocket.Name,
+        depends_on=deps,
+        renamed_from_default=(pocket.Label != pocket.Name),
+        build123d_code=unit.lines[0],
+        properties=extract_properties(getattr(pocket, "Shape", None)),
+    )
+    return [unit]
+
+
+def _translate_atomic_fillet(fil, ctx: TranslationContext) -> list[TranslationUnit]:
+    base = fil.Base
+    if not isinstance(base, (list, tuple)) or not base or base[0] is None:
+        # Fall back to previous solid in doc if Base is unset
+        base_var = _previous_solid_in_doc(fil)
+        if base_var is None:
+            raise UnsupportedFeatureError(
+                fil.TypeId,
+                f"{fil.Label} (Fillet has no Base feature)",
+            )
+    else:
+        base_var = base[0].Name
+    return _translate_fillet(fil, base_var, ctx)
+
+
+def _translate_atomic_chamfer(cha, ctx: TranslationContext) -> list[TranslationUnit]:
+    base = cha.Base
+    if not isinstance(base, (list, tuple)) or not base or base[0] is None:
+        base_var = _previous_solid_in_doc(cha)
+        if base_var is None:
+            raise UnsupportedFeatureError(
+                cha.TypeId,
+                f"{cha.Label} (Chamfer has no Base feature)",
+            )
+    else:
+        base_var = base[0].Name
+    return _translate_chamfer(cha, base_var, ctx)
+
+
+# ---------------------------------------------------------------------------
+# Part workbench Extrusion / Revolution (equivalent to Pad / Revolution but
+# in the Part workbench rather than PartDesign).
+# ---------------------------------------------------------------------------
+
+
+def _translate_part_extrusion(ext, ctx: TranslationContext) -> list[TranslationUnit]:
+    """Part::Extrusion → build123d extrude with explicit direction.
+
+    Direction comes from the Dir vector. Length: LengthFwd if non-zero, else
+    the magnitude of Dir (common convention in older Parts Library files).
+    Symmetric / Reversed / TaperAngle / DirMode != Custom are not yet
+    supported.
+    """
+    if str(getattr(ext, "DirMode", "Custom")) != "Custom":
+        raise UnsupportedFeatureError(
+            ext.TypeId,
+            f"{ext.Label} (Part::Extrusion DirMode={ext.DirMode!r}; only "
+            f"'Custom' supported)",
+        )
+    if bool(getattr(ext, "Symmetric", False)):
+        raise UnsupportedFeatureError(
+            ext.TypeId, f"{ext.Label} (Symmetric Extrusion not yet supported)"
+        )
+    if abs(float(getattr(ext, "TaperAngle", 0.0).Value
+                  if hasattr(getattr(ext, "TaperAngle", 0.0), "Value")
+                  else getattr(ext, "TaperAngle", 0.0))) > 1e-12:
+        raise UnsupportedFeatureError(
+            ext.TypeId, f"{ext.Label} (Tapered Extrusion not yet supported)"
+        )
+
+    base = ext.Base
+    base_var = base.Name
+
+    dir_vec = ext.Dir
+    dir_mag = (dir_vec.x ** 2 + dir_vec.y ** 2 + dir_vec.z ** 2) ** 0.5
+    if dir_mag < 1e-12:
+        raise UnsupportedFeatureError(
+            ext.TypeId, f"{ext.Label} (Extrusion Dir is zero)"
+        )
+
+    length_fwd_raw = getattr(ext, "LengthFwd", 0.0)
+    length_fwd = float(length_fwd_raw.Value) if hasattr(length_fwd_raw, "Value") else float(length_fwd_raw)
+    if length_fwd > 1e-12:
+        amount = length_fwd
+    else:
+        amount = dir_mag
+
+    if bool(getattr(ext, "Reversed", False)):
+        amount = -amount
+
+    ux = dir_vec.x / dir_mag
+    uy = dir_vec.y / dir_mag
+    uz = dir_vec.z / dir_mag
+
+    # If direction aligns with the sketch's natural normal (+Z for an XY
+    # sketch), omit `direction` for a cleaner emit; otherwise pass it.
+    sketch_plane = base.Placement
+    aligns_with_z = (
+        abs(sketch_plane.Rotation.Angle) < 1e-9
+        and abs(ux) < 1e-9 and abs(uy) < 1e-9 and abs(uz - 1) < 1e-9
+    )
+    if aligns_with_z:
+        line = f"{ext.Name} = extrude({base_var}, amount={amount})"
+        imports = {"extrude"}
+    else:
+        line = (
+            f"{ext.Name} = extrude({base_var}, amount={amount}, "
+            f"dir=({ux}, {uy}, {uz}))"
+        )
+        imports = {"extrude"}
+
+    unit = TranslationUnit(
+        var_name=ext.Name,
+        imports=imports,
+        lines=[line],
+        comment=f"Part::Extrusion {ext.Label!r}: amount={amount}",
+    )
+    ctx.add_step(
+        feature_type="extrusion",
+        feature_name=ext.Name,
+        depends_on=[base_var],
+        renamed_from_default=(ext.Label != ext.Name),
+        build123d_code=unit.lines[0],
+        properties=extract_properties(getattr(ext, "Shape", None)),
+    )
+    return [unit]
+
+
+def _translate_part_revolution(rev, ctx: TranslationContext) -> list[TranslationUnit]:
+    """Part::Revolution → build123d revolve around an explicit axis.
+
+    Axis: Base (origin) + Axis (direction). Angle: in degrees. Angle != 360
+    is supported (unlike PartDesign::Revolution which v1 restricts).
+    """
+    if bool(getattr(rev, "Symmetric", False)):
+        raise UnsupportedFeatureError(
+            rev.TypeId, f"{rev.Label} (Symmetric Part::Revolution not yet supported)"
+        )
+
+    source = rev.Source
+    source_var = source.Name
+
+    angle_raw = rev.Angle
+    angle = float(angle_raw.Value) if hasattr(angle_raw, "Value") else float(angle_raw)
+
+    base_vec = rev.Base
+    axis_vec = rev.Axis
+
+    # Snap to Axis.X/.Y/.Z when origin is zero and axis is canonical.
+    axis_expr: str
+    imports = {"revolve", "Axis"}
+    if (abs(base_vec.x) < 1e-9 and abs(base_vec.y) < 1e-9 and abs(base_vec.z) < 1e-9):
+        canonical = {
+            (1.0, 0.0, 0.0): "Axis.X",
+            (0.0, 1.0, 0.0): "Axis.Y",
+            (0.0, 0.0, 1.0): "Axis.Z",
+        }
+        key = (round(axis_vec.x, 9), round(axis_vec.y, 9), round(axis_vec.z, 9))
+        axis_expr = canonical.get(key, (
+            f"Axis(({base_vec.x}, {base_vec.y}, {base_vec.z}), "
+            f"({axis_vec.x}, {axis_vec.y}, {axis_vec.z}))"
+        ))
+    else:
+        axis_expr = (
+            f"Axis(({base_vec.x}, {base_vec.y}, {base_vec.z}), "
+            f"({axis_vec.x}, {axis_vec.y}, {axis_vec.z}))"
+        )
+
+    line = (
+        f"{rev.Name} = revolve({source_var}, axis={axis_expr}, "
+        f"revolution_arc={angle})"
+    )
+    unit = TranslationUnit(
+        var_name=rev.Name,
+        imports=imports,
+        lines=[line],
+        comment=f"Part::Revolution {rev.Label!r}: angle={angle}",
+    )
+    ctx.add_step(
+        feature_type="part_revolution",
+        feature_name=rev.Name,
+        depends_on=[source_var],
+        renamed_from_default=(rev.Label != rev.Name),
+        build123d_code=unit.lines[0],
+        properties=extract_properties(getattr(rev, "Shape", None)),
+    )
+    return [unit]
+
+
 TIER2_HANDLERS = {
     "PartDesign::Body": translate_body,
+    # PartDesign features at the document level (no containing Body) —
+    # common in older Parts Library files.
+    "PartDesign::Pad": _translate_atomic_pad,
+    "PartDesign::Pocket": _translate_atomic_pocket,
     "PartDesign::Revolution": _translate_atomic_revolution,
-    # Standalone sketch at the document level (rare — most sketches live in
-    # a Body and are reached via translate_body). Used by legacy files like
-    # tapon.FCStd where a free-standing Revolution references a top-level Sketch.
+    "PartDesign::Fillet": _translate_atomic_fillet,
+    "PartDesign::Chamfer": _translate_atomic_chamfer,
+    # Part workbench equivalents.
+    "Part::Extrusion": _translate_part_extrusion,
+    "Part::Revolution": _translate_part_revolution,
+    # Standalone sketch at the document level.
     "Sketcher::SketchObject": translate_sketch,
 }
