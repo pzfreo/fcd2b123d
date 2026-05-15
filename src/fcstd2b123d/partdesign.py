@@ -1479,6 +1479,80 @@ def _translate_part_revolution(rev, ctx: TranslationContext) -> list[Translation
     return [unit]
 
 
+def _translate_part_compound(comp, ctx: TranslationContext) -> list[TranslationUnit]:
+    """Part::Compound → ``Compound([s1, s2, ...])`` over its Links.
+
+    Each linked object is assumed already translated (forward-referenced
+    by name). The build123d Compound aggregates them as a single shape;
+    the verify harness aggregates volumes / inertia in parallel-axis
+    over the multi-solid result.
+    """
+    links = list(getattr(comp, "Links", []) or [])
+    if not links:
+        raise UnsupportedFeatureError(
+            comp.TypeId, f"{comp.Label} (empty Compound)"
+        )
+    part_vars = [obj.Name for obj in links]
+    line = f"{comp.Name} = Compound([{', '.join(part_vars)}])"
+    unit = TranslationUnit(
+        var_name=comp.Name,
+        imports={"Compound"},
+        lines=[line],
+        comment=f"Part::Compound {comp.Label!r}: {len(links)} parts",
+    )
+    ctx.add_step(
+        feature_type="compound",
+        feature_name=comp.Name,
+        depends_on=part_vars,
+        renamed_from_default=(comp.Label != comp.Name),
+        build123d_code=line,
+        properties=extract_properties(getattr(comp, "Shape", None)),
+    )
+    return [unit]
+
+
+def _translate_part_mirroring(mir, ctx: TranslationContext) -> list[TranslationUnit]:
+    """Part::Mirroring → ``mirror(source, about=Plane(origin, z_dir=normal))``.
+
+    FreeCAD's Part::Mirroring mirrors ``Source`` across the plane defined
+    by ``Base`` (a point on the plane) and ``Normal`` (the plane normal).
+    build123d's ``mirror(shape, about=Plane)`` does the same.
+    """
+    source = getattr(mir, "Source", None)
+    if source is None:
+        raise UnsupportedFeatureError(
+            mir.TypeId, f"{mir.Label} (Part::Mirroring with no Source)"
+        )
+    source_var = source.Name
+    base = mir.Base
+    normal = mir.Normal
+    plane_expr = (
+        f"Plane(origin=({format_value(base.x)}, {format_value(base.y)}, "
+        f"{format_value(base.z)}), z_dir=({format_value(normal.x)}, "
+        f"{format_value(normal.y)}, {format_value(normal.z)}))"
+    )
+    line = f"{mir.Name} = mirror({source_var}, about={plane_expr})"
+    unit = TranslationUnit(
+        var_name=mir.Name,
+        imports={"mirror", "Plane"},
+        lines=[line],
+        comment=(
+            f"Part::Mirroring {mir.Label!r}: "
+            f"base=({base.x:g}, {base.y:g}, {base.z:g}), "
+            f"normal=({normal.x:g}, {normal.y:g}, {normal.z:g})"
+        ),
+    )
+    ctx.add_step(
+        feature_type="mirroring",
+        feature_name=mir.Name,
+        depends_on=[source_var],
+        renamed_from_default=(mir.Label != mir.Name),
+        build123d_code=line,
+        properties=extract_properties(getattr(mir, "Shape", None)),
+    )
+    return [unit]
+
+
 TIER2_HANDLERS = {
     "PartDesign::Body": translate_body,
     # PartDesign features at the document level (no containing Body) —
@@ -1494,6 +1568,8 @@ TIER2_HANDLERS = {
     # Part workbench equivalents.
     "Part::Extrusion": _translate_part_extrusion,
     "Part::Revolution": _translate_part_revolution,
+    "Part::Compound": _translate_part_compound,
+    "Part::Mirroring": _translate_part_mirroring,
     # Standalone sketch at the document level.
     "Sketcher::SketchObject": translate_sketch,
 }

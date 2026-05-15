@@ -161,6 +161,37 @@ def make_pad_with_ellipse(out: Path) -> None:
     _save(doc, out / "tier2_partdesign/pad_with_ellipse.FCStd")
 
 
+def make_part_compound(out: Path) -> None:
+    """Part::Compound of two Part-workbench Boxes — #28 Compound support.
+
+    Two cubes of similar size so the snapshot pointcloud distributes
+    evenly between them (Hausdorff would otherwise flag the
+    under-sampled shape's vertices as outliers).
+    """
+    doc = FreeCAD.newDocument("compound")
+    b1 = doc.addObject("Part::Box", "Cube1")
+    b1.Length, b1.Width, b1.Height = 4, 4, 4
+    b2 = doc.addObject("Part::Box", "Cube2")
+    b2.Length, b2.Width, b2.Height = 3, 3, 3
+    b2.Placement.Base = FreeCAD.Vector(10, 5, 0)
+    c = doc.addObject("Part::Compound", "Compound")
+    c.Links = [b1, b2]
+    _save(doc, out / "tier5_compound/part_compound.FCStd")
+
+
+def make_part_mirroring(out: Path) -> None:
+    """Part::Mirroring of an offset Box across the YZ plane — #28 Mirroring support."""
+    doc = FreeCAD.newDocument("mirror")
+    b = doc.addObject("Part::Box", "Cube")
+    b.Length, b.Width, b.Height = 8, 4, 3
+    b.Placement.Base = FreeCAD.Vector(5, 0, 0)
+    m = doc.addObject("Part::Mirroring", "Mirror")
+    m.Source = b
+    m.Base = FreeCAD.Vector(0, 0, 0)
+    m.Normal = FreeCAD.Vector(1, 0, 0)  # YZ plane (normal along X)
+    _save(doc, out / "tier5_compound/part_mirroring.FCStd")
+
+
 def make_pad_twolengths(out: Path) -> None:
     """Minimal fixture for #29: Pad with Type='TwoLengths' (fwd + bwd extrude)."""
     doc = FreeCAD.newDocument("pad2l")
