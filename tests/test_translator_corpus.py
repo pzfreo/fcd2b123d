@@ -21,27 +21,26 @@ from tests.utils.properties import Properties
 FIXTURE_DIRS = [
     Path("tests/fixtures/tier3_corpus"),    # seed 42 (first batch)
     Path("tests/fixtures/tier3_corpus_b"),  # seed 137 (second batch)
+    Path("tests/fixtures/tier3_corpus_c"),  # seed 271 (third batch)
 ]
 
 # Fixtures whose translation reveals real v1 scope limitations. They stay in
 # the fixture directories with snapshots committed (so the corpus is
-# reproducible), but they're excluded from the assertion-based test until
-# the limitation is addressed. See tests/fixtures/tier3_corpus_b/KNOWN_ISSUES.md.
+# reproducible) but are excluded from the assertion-based test until the
+# limitation is addressed. See KNOWN_ISSUES.md in each corpus directory.
 EXCLUDED_FROM_TEST = {
-    # Multi-Body file with non-identity Body Placement (e.g. mannequin
-    # heads positioned up the figure). v1 handles single-Body /
-    # identity-Placement only.
+    # Multi-Body file with non-identity Body Placement (mannequin heads
+    # positioned up the figure) AND uses PartDesign::Groove which v1
+    # doesn't translate. v1 handles single-Body identity-Placement only.
     "Mannequin_mp-dummy-1850mm-standing-003",
     "Mannequin_mp-dummy-1850mm-standing-007",
-    # Body-less PartDesign Pad cumulative chaining: FreeCAD's old-format
-    # interpretation unions consecutive top-level Pads. We emit each as
-    # standalone. The standalone-vs-chain semantics are not consistent
-    # across FreeCAD versions / file formats — see KNOWN_ISSUES.md.
-    "Winch-Model1-Horizontal-roll",
-    # Body-less PartDesign Pocket Length chaining: similar issue —
-    # FreeCAD's interpretation subtracts from the previous solid in
-    # some legacy files.
-    "F623ZZ_Ball_Bearing",
+    # Deep fillet cascade where build123d's OCCT rejects a radius that
+    # FreeCAD's OCCT accepts. Eight cascaded fillets at radii 5–10 mm on a
+    # complex Pad-chained body. The midpoint-based edge selection drifts
+    # in floating-point as topology changes; ultimate fix is a more
+    # robust edge identification scheme (by face adjacency rather than
+    # midpoint).
+    "Oven_builtIn",
 }
 
 FIXTURES = sorted(
