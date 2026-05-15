@@ -8,6 +8,8 @@ on:
 
 jobs:
   test:
+    # Fast job — comparison utility + schema. No FreeCAD; translator tests
+    # auto-skip when FCSTD2B123D_FREECAD_PYTHON is unset.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,3 +27,49 @@ jobs:
 
       - name: Run tests
         run: uv run pytest -v
+
+  translator-tests:
+    # Slow job — installs FreeCAD via micromamba and runs the translator
+    # end-to-end tests (subprocess into FreeCAD env to produce build123d
+    # source, exec()d in this env, properties compared to snapshots).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install build123d-side dependencies
+        run: uv sync --extra dev --frozen
+
+      - name: Cache FreeCAD env
+        id: freecad-cache
+        uses: actions/cache@v4
+        with:
+          path: .conda
+          key: freecad-1.0.0-${{ runner.os }}-v1
+
+      - name: Install FreeCAD via micromamba
+        if: steps.freecad-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .conda/bin
+          curl -L https://github.com/mamba-org/micromamba-releases/releases/latest/download/micromamba-linux-64 -o .conda/bin/micromamba
+          chmod +x .conda/bin/micromamba
+          export MAMBA_ROOT_PREFIX="$PWD/.conda"
+          .conda/bin/micromamba create -y -n freecad -c conda-forge freecad=1.0 numpy python=3.12
+
+      - name: Verify FreeCAD imports
+        run: |
+          export PYTHONPATH="$PWD/.conda/envs/freecad/lib:$PYTHONPATH"
+          .conda/envs/freecad/bin/python -c "import FreeCAD; print('FreeCAD', '.'.join(FreeCAD.Version()[:3]))"
+
+      - name: Run translator tests
+        env:
+          FCSTD2B123D_FREECAD_PYTHON: ${{ github.workspace }}/.conda/envs/freecad/bin/python
+          FCSTD2B123D_FREECAD_PYTHONPATH: ${{ github.workspace }}/.conda/envs/freecad/lib
+        run: uv run pytest tests/test_translator_tier1.py -v
