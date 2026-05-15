@@ -91,6 +91,35 @@ def make_simple_pad(out: Path) -> None:
     _save(doc, out / "tier2_partdesign/simple_pad.FCStd")
 
 
+def make_pad_twolengths(out: Path) -> None:
+    """Minimal fixture for #29: Pad with Type='TwoLengths' (fwd + bwd extrude)."""
+    doc = FreeCAD.newDocument("pad2l")
+    body = doc.addObject("PartDesign::Body", "Body")
+    sketch = body.newObject("Sketcher::SketchObject", "Profile")
+    sketch.AttachmentSupport = (body.Origin.OutList[3], [""])
+    sketch.MapMode = "FlatFace"
+    v = FreeCAD.Vector
+    # 20x10 rectangle centered at origin
+    sketch.addGeometry(Part.LineSegment(v(-10, -5, 0), v(10, -5, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(10, -5, 0), v(10, 5, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(10, 5, 0), v(-10, 5, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(-10, 5, 0), v(-10, -5, 0)), False)
+    for i in range(4):
+        sketch.addConstraint(
+            Sketcher.Constraint("Coincident", i, 2, (i + 1) % 4, 1)
+        )
+    sketch.addConstraint(Sketcher.Constraint("Horizontal", 0))
+    sketch.addConstraint(Sketcher.Constraint("Horizontal", 2))
+    sketch.addConstraint(Sketcher.Constraint("Vertical", 1))
+    sketch.addConstraint(Sketcher.Constraint("Vertical", 3))
+    pad = body.newObject("PartDesign::Pad", "Pad")
+    pad.Profile = sketch
+    pad.Type = "TwoLengths"
+    pad.Length = 6   # forward
+    pad.Length2 = 4  # backward
+    _save(doc, out / "tier2_partdesign/pad_twolengths.FCStd")
+
+
 # --- Tier 3: Pad + Fillet (the topological-naming test) ---
 
 def make_box_with_fillet(out: Path) -> None:
@@ -286,6 +315,7 @@ def main() -> None:
     make_cone(args.out)
     make_torus(args.out)
     make_simple_pad(args.out)
+    make_pad_twolengths(args.out)
     make_box_with_fillet(args.out)
     make_linear_pattern_holes(args.out)
     make_polar_pattern_holes(args.out)

@@ -191,10 +191,11 @@ def _translate_pad(
     with the running body shape — that's how FreeCAD chains multiple Pads
     inside a Body (each adds material to the previous result).
     """
-    if str(getattr(pad, "Type", "Length")) != "Length":
+    pad_type = str(getattr(pad, "Type", "Length"))
+    if pad_type not in ("Length", "TwoLengths"):
         raise UnsupportedFeatureError(
             pad.TypeId,
-            f"{pad.Label} (Pad.Type={pad.Type!r}; only 'Length' supported)",
+            f"{pad.Label} (Pad.Type={pad.Type!r}; supports 'Length' / 'TwoLengths')",
         )
 
     profile = pad.Profile
@@ -206,29 +207,60 @@ def _translate_pad(
     reversed_ = bool(getattr(pad, "Reversed", False))
     midplane = bool(getattr(pad, "Midplane", False))
 
-    # Midplane extrudes total ``length`` symmetrically about the sketch
-    # plane → build123d's both=True with amount=length/2 produces the
-    # same result.
-    if midplane:
-        half = f"{length} / 2" if isinstance(length, str) else length / 2
-        extrude_args = f"{sketch_var}, amount={format_value(half)}, both=True"
-    else:
-        amount = _negate(length) if reversed_ else length
-        extrude_args = f"{sketch_var}, amount={format_value(amount)}"
+    helpers: set[str] = set()
+    imports = {"extrude"}
 
-    if base_var is None:
-        line = f"{pad.Name} = extrude({extrude_args})"
-        deps = [sketch_var]
+    if pad_type == "TwoLengths":
+        # Forward by Length, backward by Length2 from the sketch plane.
+        # Reversed flips both directions. Build two extrudes and fuse via
+        # the BuildPart-backed union helper (same pattern as pattern emit).
+        length2 = _value(pad, "Length2", ctx)
+        if reversed_:
+            fwd_amt = _negate(length)
+            bwd_amt = length2
+        else:
+            fwd_amt = length
+            bwd_amt = _negate(length2)
+        fwd = f"extrude({sketch_var}, amount={format_value(fwd_amt)})"
+        bwd = f"extrude({sketch_var}, amount={format_value(bwd_amt)})"
+        helpers.add("_pattern_union")
+        if base_var is None:
+            line = f"{pad.Name} = _pattern_union({fwd}, {bwd})"
+            deps = [sketch_var]
+        else:
+            line = f"{pad.Name} = _pattern_union({base_var}, {fwd}, {bwd})"
+            deps = [base_var, sketch_var]
+        comment = (
+            f"PartDesign::Pad {pad.Label!r}: TwoLengths fwd={length} bwd={length2}"
+            + (" (reversed)" if reversed_ else "")
+        )
     else:
-        line = f"{pad.Name} = {base_var} + extrude({extrude_args})"
-        deps = [base_var, sketch_var]
+        # Midplane extrudes total ``length`` symmetrically about the sketch
+        # plane → build123d's both=True with amount=length/2 produces the
+        # same result.
+        if midplane:
+            half = f"{length} / 2" if isinstance(length, str) else length / 2
+            extrude_args = f"{sketch_var}, amount={format_value(half)}, both=True"
+        else:
+            amount = _negate(length) if reversed_ else length
+            extrude_args = f"{sketch_var}, amount={format_value(amount)}"
+        if base_var is None:
+            line = f"{pad.Name} = extrude({extrude_args})"
+            deps = [sketch_var]
+        else:
+            line = f"{pad.Name} = {base_var} + extrude({extrude_args})"
+            deps = [base_var, sketch_var]
+        comment = (
+            f"PartDesign::Pad {pad.Label!r}: length={length}"
+            + (" (reversed)" if reversed_ else "")
+        )
 
     unit = TranslationUnit(
         var_name=pad.Name,
-        imports={"extrude"},
+        imports=imports,
         lines=[line],
-        comment=f"PartDesign::Pad {pad.Label!r}: length={length}"
-                + (" (reversed)" if reversed_ else ""),
+        comment=comment,
+        helpers=helpers,
     )
     ctx.add_step(
         feature_type="pad",
