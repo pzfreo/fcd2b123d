@@ -207,6 +207,48 @@ def make_pocket_uptoface(out: Path) -> None:
     _save(doc, out / "tier2_partdesign/pocket_uptoface.FCStd")
 
 
+def make_pocket_with_draft(out: Path) -> None:
+    """Pad + Draft on one side face — #35 PartDesign::Draft.
+
+    The side face slopes inward by 5° about the bottom face (neutral plane).
+    """
+    doc = FreeCAD.newDocument("draft")
+    body = doc.addObject("PartDesign::Body", "Body")
+    sketch = body.newObject("Sketcher::SketchObject", "Profile")
+    sketch.AttachmentSupport = (body.Origin.OutList[3], [""])
+    sketch.MapMode = "FlatFace"
+    v = FreeCAD.Vector
+    sketch.addGeometry(Part.LineSegment(v(0, 0, 0), v(40, 0, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(40, 0, 0), v(40, 30, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(40, 30, 0), v(0, 30, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(0, 30, 0), v(0, 0, 0)), False)
+    for i in range(4):
+        sketch.addConstraint(
+            Sketcher.Constraint("Coincident", i, 2, (i + 1) % 4, 1)
+        )
+    pad = body.newObject("PartDesign::Pad", "Pad")
+    pad.Profile = sketch
+    pad.Length = 20
+    doc.recompute()
+
+    # Locate the bottom face (neutral plane) and a +Y side face (drafted).
+    pad_shape = pad.Shape
+    bottom = None
+    sidey = None
+    for idx, f in enumerate(pad_shape.Faces, start=1):
+        n = f.normalAt(0, 0)
+        if abs(n.z + 1) < 1e-6:
+            bottom = idx
+        elif abs(n.y - 1) < 1e-6:
+            sidey = idx
+
+    draft = body.newObject("PartDesign::Draft", "Draft")
+    draft.Base = (pad, [f"Face{sidey}"])
+    draft.NeutralPlane = (pad, [f"Face{bottom}"])
+    draft.Angle = 5
+    _save(doc, out / "tier3_filletchamfer/pad_with_draft.FCStd")
+
+
 def make_part_compound(out: Path) -> None:
     """Part::Compound of two Part-workbench Boxes — #28 Compound support.
 
