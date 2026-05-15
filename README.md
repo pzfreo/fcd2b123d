@@ -70,6 +70,34 @@ The sketches feeding each Pad/Pocket are translated above as `make_face(Line(...
 
 STL exports of both shapes (drop into any STL viewer to confirm by eye): [FreeCAD source](docs/examples/partdesign_example.freecad.stl) · [build123d translation](docs/examples/partdesign_example.build123d.stl).
 
+## Example: ANSI hex cap screw (topological-naming on a real fastener)
+
+A real Parts Library fastener — `ANSI-ASME-B18_2_1_Hex_Head_Cap_Screw_1_4-20x1.FCStd` — built from a revolved cross-section, a hex-socket Pocket, and a tip Chamfer. The Chamfer is the interesting bit: FreeCAD records its target as `Edge<N>` against the evaluated BRep, which only makes sense inside FreeCAD. The translator captures that edge's geometric midpoint at translation time and emits a build123d filter that picks the same edge in build123d's BRep (see [ADR-0001](docs/adr/0001-freecad-runtime-vs-standalone-parser.md)).
+
+| FreeCAD source | build123d translation |
+|:---:|:---:|
+| ![FreeCAD source](docs/images/hex_cap_screw.freecad.png) | ![build123d translation](docs/images/hex_cap_screw.build123d.png) |
+| `hex_cap_screw.FCStd` | `hex_cap_screw.py` (63 lines) |
+
+The Chamfer emit, end-to-end:
+
+```python
+# PartDesign::Revolution 'Revolution': angle=360.0
+Revolution = revolve(Sketch, axis=Axis.Z, revolution_arc=360)
+
+# PartDesign::Pocket 'Pocket' (body-less, ThroughAll)  -- the hex socket
+Pocket = Revolution - extrude(Sketch001, amount=-1000000.0)
+
+# PartDesign::Chamfer 'Chamfer': size=1.0 on 1 edges of Pocket
+Chamfer = chamfer(
+    _edges_at(Pocket, [(-3.1750000000000007, 0, -25.400000000000006)]), length=1
+)
+```
+
+`_edges_at` is a one-line helper emitted at module top — it iterates build123d's edges and keeps the one whose midpoint matches the FreeCAD-captured target. That single mechanic is what makes the FreeCAD-runtime translator worth the two-environment setup: a pure-text `.FCStd` parser can't resolve `Edge<N>` because FreeCAD doesn't store edge geometry in the XML — it lives in the BRep blob that only the FreeCAD evaluator understands.
+
+Full output: [`hex_cap_screw.py`](docs/examples/hex_cap_screw.py). STL exports: [FreeCAD source](docs/examples/hex_cap_screw.freecad.stl) · [build123d translation](docs/examples/hex_cap_screw.build123d.stl).
+
 ## What the output looks like
 
 A non-parametric file (a single `Part::Box`):
