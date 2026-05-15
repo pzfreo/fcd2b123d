@@ -1235,12 +1235,50 @@ def _previous_solid_in_doc_with_typeid(obj) -> tuple[str, str] | None:
     return None
 
 
+_BOOLEAN_REFERENCE_TYPES = {
+    "Part::Cut", "Part::Fuse", "Part::Common",
+    "Part::MultiFuse", "Part::MultiCommon", "Part::Compound",
+    "Part::Mirroring",
+}
+
+
+def _is_referenced_by_top_level_boolean(pad) -> bool:
+    """True if any document object of a top-level boolean / composition
+    type references this Pad as Base / Tool / Source / Links.
+
+    Used by ``_translate_atomic_pad`` to decide whether the Pad stands
+    alone (referenced separately by a downstream Cut/Fuse/etc.) or
+    chains into the next Pad. Steel-sheets-3000mm is the canonical
+    standalone case: two Pads of identical sketch area feeding a Cut
+    that subtracts one from the other; the Pads must NOT chain.
+    """
+    doc = pad.Document
+    for obj in doc.Objects:
+        if obj.TypeId not in _BOOLEAN_REFERENCE_TYPES:
+            continue
+        for prop in ("Base", "Tool", "Source"):
+            ref = getattr(obj, prop, None)
+            if ref is pad:
+                return True
+        links = getattr(obj, "Links", None) or []
+        for link in links:
+            if link is pad:
+                return True
+    return False
+
+
 def _translate_atomic_pad(pad, ctx: TranslationContext) -> list[TranslationUnit]:
-    # Top-level Pads in legacy Body-less files chain additively to the
-    # previous solid in document order (the Winch fixture from batch 2
-    # demonstrates this). A first Pad with no previous solid stays
-    # standalone (the FlatWasher case).
-    base_var = _previous_solid_in_doc(pad)
+    # Top-level Pads in legacy Body-less files sometimes chain additively
+    # onto the previous solid (Winch fixture from batch 2 demonstrates
+    # this) and sometimes stand alone (steel-sheets-3000mm has two Pads
+    # whose downstream Part::Cut subtracts one from the other — they
+    # must NOT chain). The distinguishing signal is whether the Pad is
+    # referenced by a downstream Part-workbench boolean / composition:
+    # if so, FreeCAD treats it as an independent solid.
+    if _is_referenced_by_top_level_boolean(pad):
+        base_var = None
+    else:
+        base_var = _previous_solid_in_doc(pad)
     return [_translate_pad(pad, ctx, base_var=base_var)]
 
 
