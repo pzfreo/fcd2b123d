@@ -62,6 +62,50 @@ def make_torus(out: Path) -> None:
     _save(doc, out / "tier1_primitives/torus_R20_r5.FCStd")
 
 
+def make_box_rotated_z(out: Path) -> None:
+    """Box rotated 45° about Z — exercises single-axis Rot emit path (#54)."""
+    doc = FreeCAD.newDocument("boxrotz")
+    b = doc.addObject("Part::Box", "Cube")
+    b.Length = 10
+    b.Width = 20
+    b.Height = 6
+    b.Placement = FreeCAD.Placement(
+        FreeCAD.Vector(15, 0, 0),
+        FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 45),
+    )
+    _save(doc, out / "tier1_primitives/box_rotated_z45.FCStd")
+
+
+def make_cylinder_rotated_y(out: Path) -> None:
+    """Cylinder rotated 90° about Y (lying horizontal) — #54 axis-aligned case."""
+    doc = FreeCAD.newDocument("cylroty")
+    c = doc.addObject("Part::Cylinder", "Cyl")
+    c.Radius = 4
+    c.Height = 20
+    c.Placement = FreeCAD.Placement(
+        FreeCAD.Vector(5, 10, 3),
+        FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
+    )
+    _save(doc, out / "tier1_primitives/cylinder_rotated_y90.FCStd")
+
+
+def make_cone_rotated_multi(out: Path) -> None:
+    """Cone with combined yaw+pitch — exercises the multi-axis Rotation path."""
+    doc = FreeCAD.newDocument("conerot")
+    c = doc.addObject("Part::Cone", "Cone")
+    c.Radius1 = 8
+    c.Radius2 = 4
+    c.Height = 15
+    # Apply yaw=30° then pitch=20° as intrinsic Z then Y rotations. FreeCAD
+    # composes: total = Rz(30) * Ry(20) as a single quaternion.
+    rot_y = FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 20)
+    rot_z = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 30)
+    c.Placement = FreeCAD.Placement(
+        FreeCAD.Vector(0, 0, 0), rot_z.multiply(rot_y),
+    )
+    _save(doc, out / "tier1_primitives/cone_rotated_multi.FCStd")
+
+
 # --- Tier 2: minimal PartDesign Body + Sketch + Pad ---
 
 def make_simple_pad(out: Path) -> None:
@@ -314,6 +358,9 @@ def main() -> None:
     make_sphere(args.out)
     make_cone(args.out)
     make_torus(args.out)
+    make_box_rotated_z(args.out)
+    make_cylinder_rotated_y(args.out)
+    make_cone_rotated_multi(args.out)
     make_simple_pad(args.out)
     make_pad_twolengths(args.out)
     make_box_with_fillet(args.out)
