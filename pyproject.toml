@@ -10,11 +10,13 @@ requires-python = ">=3.10"
 dependencies = [
     "build123d",
     "numpy",
+    "black",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "ruff",
 ]
 
 [tool.hatch.build.targets.wheel]

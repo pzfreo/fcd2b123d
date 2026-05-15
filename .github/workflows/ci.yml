@@ -52,7 +52,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .conda
-          key: freecad-1.0.0-${{ runner.os }}-v1
+          # v2: added black (used by the emitter to format generated source)
+          key: freecad-1.0.0-${{ runner.os }}-v2
 
       - name: Install FreeCAD via micromamba
         if: steps.freecad-cache.outputs.cache-hit != 'true'
@@ -61,7 +62,7 @@ jobs:
           curl -L https://github.com/mamba-org/micromamba-releases/releases/latest/download/micromamba-linux-64 -o .conda/bin/micromamba
           chmod +x .conda/bin/micromamba
           export MAMBA_ROOT_PREFIX="$PWD/.conda"
-          .conda/bin/micromamba create -y -n freecad -c conda-forge freecad=1.0 numpy python=3.12
+          .conda/bin/micromamba create -y -n freecad -c conda-forge freecad=1.0 numpy black python=3.12
 
       - name: Verify FreeCAD imports
         run: |
