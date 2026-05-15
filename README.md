@@ -46,27 +46,37 @@ The file you get when you walk through [FreeCAD's PartDesign Bearingblock tutori
 | FreeCAD source | build123d translation |
 |:---:|:---:|
 | ![FreeCAD source](docs/images/partdesign_example.freecad.png) | ![build123d translation](docs/images/partdesign_example.build123d.png) |
-| `partdesign_example.FCStd` | `partdesign_example.py` (59 lines) |
+| `partdesign_example.FCStd` | `partdesign_example.py` (55 lines) |
 
-`fcstd2b123d` translates it to **59 lines of build123d Python**. The four feature operations read straight off the FreeCAD feature tree:
+`fcstd2b123d` translates it to **55 lines of build123d Python**. The four feature operations read straight off the FreeCAD feature tree:
 
 ```python
 # PartDesign::Pad 'Pad': length=100.0 (reversed)
-Pad = extrude(Sketch, amount=-100)
+pad = extrude(sketch, amount=-100)
 
 # PartDesign::Pocket 'Pocket': length=15.0
-Pocket = Pad - extrude(Sketch001, amount=-15)
+pocket = pad - extrude(sketch_001, amount=-15)
 
 # PartDesign::Pocket 'Pocket001': length=50.0
-Pocket001 = Pocket - extrude(Sketch003, amount=-50)
+pocket_001 = pocket - extrude(sketch_003, amount=-50)
 
 # PartDesign::Pocket 'Pocket002': ThroughAll (reversed)
-Pocket002 = Pocket001 - extrude(Sketch002, amount=1000000)
+pocket_002 = pocket_001 - extrude(sketch_002, amount=1000000)
 
-result = Pocket002
+result = pocket_002
 ```
 
-The sketches feeding each Pad/Pocket are translated above as `make_face(Line(...) + Line(...) + CenterArc(...))` chains; see the [full output](docs/examples/partdesign_example.py).
+Sketches feed each Pad/Pocket via a hoisted 1D curve and an explicit `make_face` — runs of consecutive line segments collapse into a single `Polyline`:
+
+```python
+sketch_profile = Polyline(
+    (20.358962517357057, 20), (-55, 20), (-55, -20), (55, -20)
+) + CenterArc(center=(54.999978668734606, 15), radius=35, start_angle=270.00003491975656,
+              arc_size=261.7867543785052)
+sketch = make_face(sketch_profile)
+```
+
+See the [full output](docs/examples/partdesign_example.py).
 
 STL exports of both shapes (drop into any STL viewer to confirm by eye): [FreeCAD source](docs/examples/partdesign_example.freecad.stl) · [build123d translation](docs/examples/partdesign_example.build123d.stl).
 
@@ -77,22 +87,24 @@ A real Parts Library fastener — `ANSI-ASME-B18_2_1_Hex_Head_Cap_Screw_1_4-20x1
 | FreeCAD source | build123d translation |
 |:---:|:---:|
 | ![FreeCAD source](docs/images/hex_cap_screw.freecad.png) | ![build123d translation](docs/images/hex_cap_screw.build123d.png) |
-| `hex_cap_screw.FCStd` | `hex_cap_screw.py` (63 lines) |
+| `hex_cap_screw.FCStd` | `hex_cap_screw.py` (73 lines) |
 
 The Chamfer emit, end-to-end:
 
 ```python
 # PartDesign::Revolution 'Revolution': angle=360.0
-Revolution = revolve(Sketch, axis=Axis.Z, revolution_arc=360)
+revolution = revolve(sketch, axis=Axis.Z, revolution_arc=360)
 
 # PartDesign::Pocket 'Pocket' (body-less, ThroughAll)  -- the hex socket
-Pocket = Revolution - extrude(Sketch001, amount=-1000000.0)
+pocket = revolution - extrude(sketch_001, amount=-1000000.0)
 
 # PartDesign::Chamfer 'Chamfer': size=1.0 on 1 edges of Pocket
-Chamfer = chamfer(
-    _edges_at(Pocket, [(-3.1750000000000007, 0, -25.400000000000006)]), length=1
+chamfer_0 = chamfer(
+    _edges_at(pocket, [(-3.1750000000000007, 0, -25.400000000000006)]), length=1
 )
 ```
+
+(The trailing `_0` on `chamfer_0` avoids shadowing the build123d `chamfer` function — when a FreeCAD feature would lowercase to an imported function name, the translator appends a numeric suffix.)
 
 `_edges_at` is a one-line helper emitted at module top — it iterates build123d's edges and keeps the one whose midpoint matches the FreeCAD-captured target. That single mechanic is what makes the FreeCAD-runtime translator worth the two-environment setup: a pure-text `.FCStd` parser can't resolve `Edge<N>` because FreeCAD doesn't store edge geometry in the XML — it lives in the BRep blob that only the FreeCAD evaluator understands.
 
@@ -107,9 +119,9 @@ A non-parametric file (a single `Part::Box`):
 from build123d import Box, Pos
 
 # Part::Box 'TestBox': Length=10.0, Width=20.0, Height=30.0
-TestBox = Pos(5, 10, 15) * Box(10, 20, 30)
+test_box = Pos(5, 10, 15) * Box(10, 20, 30)
 
-result = TestBox
+result = test_box
 ```
 
 A parametric file (a Spreadsheet driving the Box dimensions):
@@ -122,8 +134,8 @@ from build123d import Box, Pos
 def make_part(depth=15, height=10, width=25):
     """Translated parametric design. Defaults match the source values."""
     # Part::Box 'Box': Length=width, Width=depth, Height=height
-    Box_ = Pos(width / 2, depth / 2, height / 2) * Box(width, depth, height)
-    return Box_
+    box = Pos(width / 2, depth / 2, height / 2) * Box(width, depth, height)
+    return box
 
 
 result = make_part()
@@ -133,8 +145,8 @@ A tier-3 file with a fillet (showing the topological-naming resolution):
 
 ```python
 # PartDesign::Fillet 'Fillet': radius=3.0 on 4 edges of Pad
-Fillet = fillet(
-    _edges_at(Pad, [(0, 0, 7.5), (30, 0, 7.5), (30, 20, 7.5), (0, 20, 7.5)]),
+fillet_0 = fillet(
+    _edges_at(pad, [(0, 0, 7.5), (30, 0, 7.5), (30, 20, 7.5), (0, 20, 7.5)]),
     radius=3,
 )
 ```
