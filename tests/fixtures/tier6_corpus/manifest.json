@@ -1,0 +1,263 @@
+[
+  {
+    "fixture_stem": "AerosolBox",
+    "source_path": "Medical Parts/AerosolBox/AerosolBox.FCStd",
+    "max_tier": 6,
+    "object_count": 49,
+    "expression_count": 17,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "Canal_block",
+    "source_path": "Architectural Parts/Construction blocks/Canal block.FCStd",
+    "max_tier": 2,
+    "object_count": 12,
+    "expression_count": 1,
+    "has_spreadsheet": false,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "LinearSlide-MGN9H",
+    "source_path": "Mechanical Parts/Bearings/linear_bearings/LinearSlide-MGN9H.FCStd",
+    "max_tier": 6,
+    "object_count": 14,
+    "expression_count": 17,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "makerbeam_profile",
+    "source_path": "Mechanical Parts/Profiles EN/Makerbeam/makerbeam_profile.FCStd",
+    "max_tier": 6,
+    "object_count": 22,
+    "expression_count": 2,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "T-shape_brackets",
+    "source_path": "Mechanical Parts/Mountings/Joining_plate/T-shape_brackets.FCStd",
+    "max_tier": 6,
+    "object_count": 25,
+    "expression_count": 16,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "LinearSlide-MGNx-XX-Rail",
+    "source_path": "Mechanical Parts/Bearings/linear_bearings/LinearSlide-MGNx-XX-Rail.FCStd",
+    "max_tier": 6,
+    "object_count": 17,
+    "expression_count": 21,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "SKxx_Linear_Rail_Shaft_Support",
+    "source_path": "Mechanical Parts/Fasteners/Rod/SKxx Linear Rail Shaft Support.FCStd",
+    "max_tier": 6,
+    "object_count": 38,
+    "expression_count": 29,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "Straight_brackets",
+    "source_path": "Mechanical Parts/Mountings/Joining_plate/Straight_brackets.FCStd",
+    "max_tier": 6,
+    "object_count": 22,
+    "expression_count": 8,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "ISO4032_Hex_Nut_M4",
+    "source_path": "Mechanical Parts/Fasteners/Nuts/Metric/ISO4032_Hex_Nut_M4.FCStd",
+    "max_tier": 3,
+    "object_count": 15,
+    "expression_count": 1,
+    "has_spreadsheet": false,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "drawing-pin-with-cover",
+    "source_path": "Generic objects/pushpins/drawing-pin-with-cover.fcstd",
+    "max_tier": 3,
+    "object_count": 29,
+    "expression_count": 2,
+    "has_spreadsheet": false,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "battery-AA",
+    "source_path": "Electrical Parts/Batteries/battery-AA.FCStd",
+    "max_tier": 6,
+    "object_count": 21,
+    "expression_count": 7,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "Perfil_R_5851",
+    "source_path": "Mechanical Parts/Carpentry iron profile/Perfil_R_5851.FCStd",
+    "max_tier": 6,
+    "object_count": 11,
+    "expression_count": 12,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "TS35",
+    "source_path": "Mechanical Parts/Profiles EN/Symmetrical rail/TS35.fcstd",
+    "max_tier": 6,
+    "object_count": 8,
+    "expression_count": 1,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "LinearSlide-MGN12H",
+    "source_path": "Mechanical Parts/Bearings/linear_bearings/LinearSlide-MGN12H.FCStd",
+    "max_tier": 6,
+    "object_count": 14,
+    "expression_count": 17,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "LinearSlide-MGN9-Rail",
+    "source_path": "Mechanical Parts/Bearings/linear_bearings/LinearSlide-MGN9-Rail.FCStd",
+    "max_tier": 6,
+    "object_count": 17,
+    "expression_count": 22,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "LinearSlide-MGN9C",
+    "source_path": "Mechanical Parts/Bearings/linear_bearings/LinearSlide-MGN9C.FCStd",
+    "max_tier": 6,
+    "object_count": 14,
+    "expression_count": 17,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "SKXX",
+    "source_path": "Mechanical Parts/Mountings/SK08/SKXX.FCStd",
+    "max_tier": 6,
+    "object_count": 30,
+    "expression_count": 18,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "LinearSlide-MGN12-Rail",
+    "source_path": "Mechanical Parts/Bearings/linear_bearings/LinearSlide-MGN12-Rail.FCStd",
+    "max_tier": 6,
+    "object_count": 17,
+    "expression_count": 20,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "LinearSlide-MGN7H",
+    "source_path": "Mechanical Parts/Bearings/linear_bearings/LinearSlide-MGN7H.FCStd",
+    "max_tier": 6,
+    "object_count": 14,
+    "expression_count": 17,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "Foot",
+    "source_path": "Electro-pneumatic/Fixings/Guss&Roch/Foot.FCStd",
+    "max_tier": 6,
+    "object_count": 26,
+    "expression_count": 18,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "Parametric_LiPo",
+    "source_path": "Electronics Parts/Batteries/Parametric_LiPo.FCStd",
+    "max_tier": 6,
+    "object_count": 58,
+    "expression_count": 15,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "LinearSlide-MGN7C",
+    "source_path": "Mechanical Parts/Bearings/linear_bearings/LinearSlide-MGN7C.FCStd",
+    "max_tier": 6,
+    "object_count": 14,
+    "expression_count": 17,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "Googly_eyes",
+    "source_path": "Generic objects/Googly_eyes/Googly_eyes.FCStd",
+    "max_tier": 6,
+    "object_count": 41,
+    "expression_count": 19,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "1x3-male-pin-header-right-angle-type-II",
+    "source_path": "Electronics Parts/Headers/2.54mm-pitch/male/right-angle/1x3-male-pin-header-right-angle-type-II.fcstd",
+    "max_tier": 4,
+    "object_count": 57,
+    "expression_count": 2,
+    "has_spreadsheet": false,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "Perfil_R_5852",
+    "source_path": "Mechanical Parts/Carpentry iron profile/Perfil_R_5852.FCStd",
+    "max_tier": 6,
+    "object_count": 11,
+    "expression_count": 9,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "LinearSlide-MGN7-Rail",
+    "source_path": "Mechanical Parts/Bearings/linear_bearings/LinearSlide-MGN7-Rail.FCStd",
+    "max_tier": 6,
+    "object_count": 17,
+    "expression_count": 26,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "L-shape_brackets",
+    "source_path": "Mechanical Parts/Mountings/Joining_plate/L-shape_brackets.FCStd",
+    "max_tier": 6,
+    "object_count": 23,
+    "expression_count": 13,
+    "has_spreadsheet": true,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "drawing-pin",
+    "source_path": "Generic objects/pushpins/drawing-pin.fcstd",
+    "max_tier": 3,
+    "object_count": 29,
+    "expression_count": 2,
+    "has_spreadsheet": false,
+    "has_varset": false
+  },
+  {
+    "fixture_stem": "Profile_HEA",
+    "source_path": "Architectural Parts/Beams/Profile HEA.FCStd",
+    "max_tier": 6,
+    "object_count": 11,
+    "expression_count": 8,
+    "has_spreadsheet": true,
+    "has_varset": false
+  }
+]

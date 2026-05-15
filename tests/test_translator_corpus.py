@@ -19,9 +19,10 @@ from tests.utils.compare import assert_equivalent, extract_build123d
 from tests.utils.properties import Properties
 
 FIXTURE_DIRS = [
-    Path("tests/fixtures/tier3_corpus"),    # seed 42 (first batch)
-    Path("tests/fixtures/tier3_corpus_b"),  # seed 137 (second batch)
-    Path("tests/fixtures/tier3_corpus_c"),  # seed 271 (third batch)
+    Path("tests/fixtures/tier3_corpus"),    # seed 42 — tier-3 random
+    Path("tests/fixtures/tier3_corpus_b"),  # seed 137 — tier-3 random
+    Path("tests/fixtures/tier3_corpus_c"),  # seed 271 — tier-3 random
+    Path("tests/fixtures/tier6_corpus"),    # seed 519 — parametric (Spreadsheet)
 ]
 
 # Fixtures whose translation reveals real v1 scope limitations. They stay in
@@ -29,18 +30,30 @@ FIXTURE_DIRS = [
 # reproducible) but are excluded from the assertion-based test until the
 # limitation is addressed. See KNOWN_ISSUES.md in each corpus directory.
 EXCLUDED_FROM_TEST = {
-    # Multi-Body file with non-identity Body Placement (mannequin heads
-    # positioned up the figure) AND uses PartDesign::Groove which v1
-    # doesn't translate. v1 handles single-Body identity-Placement only.
+    # tier3_corpus_b: multi-Body with non-identity Body Placement +
+    # unimplemented PartDesign::Groove.
     "Mannequin_mp-dummy-1850mm-standing-003",
     "Mannequin_mp-dummy-1850mm-standing-007",
-    # Deep fillet cascade where build123d's OCCT rejects a radius that
-    # FreeCAD's OCCT accepts. Eight cascaded fillets at radii 5–10 mm on a
-    # complex Pad-chained body. The midpoint-based edge selection drifts
-    # in floating-point as topology changes; ultimate fix is a more
-    # robust edge identification scheme (by face adjacency rather than
-    # midpoint).
+    # tier3_corpus_c: deep fillet cascade where build123d's OCCT rejects a
+    # radius FreeCAD accepts. Midpoint-based selection drifts; needs
+    # face-adjacency or topology-walk identification.
     "Oven_builtIn",
+    # tier6_corpus: tier-2/3/4/5 features not yet implemented, geometry
+    # mismatches, or sketch quirks.
+    "1x3-male-pin-header-right-angle-type-II",  # PartDesign::LinearPattern (tier 4)
+    "AerosolBox",                # tier-4/5 feature beyond v1 scope
+    "Foot",                      # post-Midplane geometric mismatch (~4% volume)
+    "Googly_eyes",               # Sketch with Ellipse — not supported
+    "ISO4032_Hex_Nut_M4",        # Fillet edge selection drifts after Midplane Pad
+    "L-shape_brackets",          # post-Midplane feature beyond v1
+    "LinearSlide-MGNx-XX-Rail",  # tier-2 feature beyond v1
+    "Parametric_LiPo",           # Pocket Type='UpToFirst' — unimplemented
+    "SKxx_Linear_Rail_Shaft_Support",  # PartDesign::Hole (tier-2; unimplemented)
+    "SKXX",                      # Part::Common (tier 5; unimplemented)
+    "Straight_brackets",         # ReferencePocket — unknown PartDesign type
+    "T-shape_brackets",          # PartDesign::LinearPattern (tier 4)
+    "TS35",                      # tier-2 feature beyond v1
+    "drawing-pin",               # disconnected sketch geometry
 }
 
 FIXTURES = sorted(

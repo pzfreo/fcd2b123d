@@ -30,7 +30,33 @@ from .context import TranslationContext
 from .emitter import TranslationUnit, format_value, vfmt
 from .errors import UnsupportedFeatureError
 from .freecad_properties import extract_properties
+from .parametric import resolve_property
 from .sketch import translate_sketch
+
+
+def _value(obj, prop_name: str, ctx: TranslationContext, value_or_obj=None):
+    """Resolve a property to either a parametric expression (str) or a literal (float).
+
+    When ctx.parameters is set and obj has an ExpressionEngine binding for
+    ``prop_name`` that maps to a known parameter, return the rewritten
+    expression string. Otherwise fall back to the literal value.
+    """
+    if ctx.parameters is not None:
+        expr = resolve_property(obj, prop_name, ctx.parameters)
+        if expr is not None:
+            return expr
+    if value_or_obj is None:
+        value_or_obj = getattr(obj, prop_name)
+    if hasattr(value_or_obj, "Value"):
+        return float(value_or_obj.Value)
+    return float(value_or_obj)
+
+
+def _negate(v):
+    """Negate a value or expression. Handles both literals and strings."""
+    if isinstance(v, str):
+        return f"-({v})"
+    return -v
 
 _TOL = 1e-9
 
@@ -135,28 +161,31 @@ def _translate_pad(
             pad.TypeId,
             f"{pad.Label} (Pad.Type={pad.Type!r}; only 'Length' supported)",
         )
-    if bool(getattr(pad, "Midplane", False)):
-        raise UnsupportedFeatureError(
-            pad.TypeId, f"{pad.Label} (Midplane Pad not yet supported)"
-        )
 
     profile = pad.Profile
     if isinstance(profile, (list, tuple)):
         profile = profile[0]
     sketch_var = profile.Name
 
-    length = float(pad.Length.Value)
+    length = _value(pad, "Length", ctx)
     reversed_ = bool(getattr(pad, "Reversed", False))
-    amount = -length if reversed_ else length
+    midplane = bool(getattr(pad, "Midplane", False))
+
+    # Midplane extrudes total ``length`` symmetrically about the sketch
+    # plane → build123d's both=True with amount=length/2 produces the
+    # same result.
+    if midplane:
+        half = f"{length} / 2" if isinstance(length, str) else length / 2
+        extrude_args = f"{sketch_var}, amount={format_value(half)}, both=True"
+    else:
+        amount = _negate(length) if reversed_ else length
+        extrude_args = f"{sketch_var}, amount={format_value(amount)}"
 
     if base_var is None:
-        line = f"{pad.Name} = extrude({sketch_var}, amount={format_value(amount)})"
+        line = f"{pad.Name} = extrude({extrude_args})"
         deps = [sketch_var]
     else:
-        line = (
-            f"{pad.Name} = {base_var} + "
-            f"extrude({sketch_var}, amount={format_value(amount)})"
-        )
+        line = f"{pad.Name} = {base_var} + extrude({extrude_args})"
         deps = [base_var, sketch_var]
 
     unit = TranslationUnit(
@@ -195,16 +224,13 @@ def _translate_pocket(
             f"{pocket.Label} (Pocket.Type={pocket_type!r}; tier-2 supports "
             f"'Length' and 'ThroughAll' only)",
         )
-    if bool(getattr(pocket, "Midplane", False)):
-        raise UnsupportedFeatureError(
-            pocket.TypeId, f"{pocket.Label} (Midplane Pocket not yet supported)"
-        )
 
     profile = pocket.Profile
     if isinstance(profile, (list, tuple)):
         profile = profile[0]
     sketch_var = profile.Name
     reversed_ = bool(getattr(pocket, "Reversed", False))
+    midplane = bool(getattr(pocket, "Midplane", False))
 
     if pocket_type == "ThroughAll":
         length = _THROUGH_ALL_LENGTH
@@ -215,13 +241,21 @@ def _translate_pocket(
         )
         note = "ThroughAll" + (" (reversed)" if reversed_ else "")
     else:
-        length = float(pocket.Length.Value)
-        amount = length if reversed_ else -length
-        line = (
-            f"{pocket.Name} = {base_var} - "
-            f"extrude({sketch_var}, amount={format_value(amount)})"
-        )
-        note = f"length={length}" + (" (reversed)" if reversed_ else "")
+        length = _value(pocket, "Length", ctx)
+        if midplane:
+            half = f"{length} / 2" if isinstance(length, str) else length / 2
+            line = (
+                f"{pocket.Name} = {base_var} - "
+                f"extrude({sketch_var}, amount={format_value(half)}, both=True)"
+            )
+            note = f"length={length} (midplane)"
+        else:
+            amount = length if reversed_ else _negate(length)
+            line = (
+                f"{pocket.Name} = {base_var} - "
+                f"extrude({sketch_var}, amount={format_value(amount)})"
+            )
+            note = f"length={length}" + (" (reversed)" if reversed_ else "")
 
     unit = TranslationUnit(
         var_name=pocket.Name,
@@ -324,12 +358,11 @@ def _translate_revolution(
     if isinstance(profile, (list, tuple)):
         profile = profile[0]
     sketch_var = profile.Name
-    angle_raw = rev.Angle
-    angle = float(angle_raw.Value) if hasattr(angle_raw, "Value") else float(angle_raw)
+    angle = _value(rev, "Angle", ctx)
     reversed_ = bool(getattr(rev, "Reversed", False))
     axis_expr, axis_imports = _axis_expr_from_reference(rev)
     if reversed_:
-        angle = -angle
+        angle = _negate(angle)
 
     imports = {"revolve"} | axis_imports
 
@@ -458,7 +491,7 @@ def _dressup_unit(
             f"{obj.Label} (no edges referenced)",
         )
 
-    radius = float(getattr(obj, radius_attr).Value)
+    radius = _value(obj, radius_attr, ctx)
     midpoints_repr = _format_midpoints(midpoints)
     var = obj.Name
 

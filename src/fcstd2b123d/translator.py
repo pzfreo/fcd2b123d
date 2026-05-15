@@ -14,6 +14,7 @@ from .emitter import TranslationUnit, render_module
 from .errors import UnsupportedFeatureError
 from .freecad_properties import freecad_version
 from .loader import open_document
+from .parametric import extract_parameters
 from .partdesign import TIER2_HANDLERS
 from .primitives import TIER1_HANDLERS
 
@@ -29,6 +30,10 @@ INFRASTRUCTURE_TYPES = {
     # (e.g. multi-Body mannequins). They're support frames for downstream
     # features and don't translate to anything on their own.
     "PartDesign::CoordinateSystem",
+    # Spreadsheets carry the parameter values; the translator extracts them
+    # via extract_parameters() before the main loop runs, so they don't
+    # need a direct translation.
+    "Spreadsheet::Sheet",
 }
 
 
@@ -57,6 +62,10 @@ def translate_with_context(
     )
     units: list[TranslationUnit] = []
     with open_document(path) as doc:
+        # Tier-6: pull parameters from Spreadsheet(s) before geometry walk.
+        # Handlers consult ctx.parameters when emitting property values.
+        ctx.parameters = extract_parameters(doc)
+
         owned = _names_owned_by_bodies(doc)
         for obj in doc.Objects:
             if obj.Name in owned or obj.TypeId in INFRASTRUCTURE_TYPES:
@@ -66,7 +75,7 @@ def translate_with_context(
                 raise UnsupportedFeatureError(obj.TypeId, obj.Label)
             units.extend(handler(obj, ctx))
 
-    source = render_module(units, path)
+    source = render_module(units, path, parameters=ctx.parameters)
     return source, ctx
 
 

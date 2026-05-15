@@ -15,9 +15,24 @@ emitted build123d geometry match FreeCAD's placement.
 from __future__ import annotations
 
 from .context import TranslationContext
-from .emitter import TranslationUnit, format_value, vfmt
+from .emitter import TranslationUnit, add_expr, format_value, half_expr, vfmt
 from .errors import UnsupportedFeatureError
 from .freecad_properties import extract_properties
+from .parametric import resolve_property
+
+
+def _value(obj, prop_name: str, ctx: TranslationContext):
+    """Parametric-aware property reader (same shape as partdesign._value)."""
+    if ctx.parameters is not None:
+        expr = resolve_property(obj, prop_name, ctx.parameters)
+        if expr is not None:
+            return expr
+    raw = getattr(obj, prop_name)
+    return float(raw.Value) if hasattr(raw, "Value") else float(raw)
+
+
+def _is_any_string(*values) -> bool:
+    return any(isinstance(v, str) for v in values)
 
 
 # build123d names we import into the translated module. A FreeCAD object's
@@ -79,19 +94,35 @@ def _record(
 
 
 def translate_box(obj, ctx: TranslationContext) -> list[TranslationUnit]:
-    L = float(obj.Length.Value)
-    W = float(obj.Width.Value)
-    H = float(obj.Height.Value)
+    L = _value(obj, "Length", ctx)
+    W = _value(obj, "Width", ctx)
+    H = _value(obj, "Height", ctx)
     px, py, pz = _placement_offset(obj)
-    expr, extra_imports = _wrap(
-        f"Box({vfmt(L, W, H)})",
-        _pos_expr(px + L / 2, py + W / 2, pz + H / 2),
-    )
+
+    box_args = f"{format_value(L)}, {format_value(W)}, {format_value(H)}"
+    if _is_any_string(L, W, H):
+        # Parametric: build the offset expression as a string so the
+        # dimensions appear as variable references.
+        pos = (
+            f"Pos({add_expr(px, half_expr(L))}, "
+            f"{add_expr(py, half_expr(W))}, "
+            f"{add_expr(pz, half_expr(H))})"
+        )
+        full = f"{pos} * Box({box_args})"
+        imports = {"Box", "Pos"}
+    else:
+        expr, extra_imports = _wrap(
+            f"Box({box_args})",
+            _pos_expr(px + L / 2, py + W / 2, pz + H / 2),
+        )
+        full = expr
+        imports = {"Box"} | extra_imports
+
     var = _safe_var(obj.Name)
     unit = TranslationUnit(
         var_name=var,
-        imports={"Box"} | extra_imports,
-        lines=[f"{var} = {expr}"],
+        imports=imports,
+        lines=[f"{var} = {full}"],
         comment=f"Part::Box {obj.Label!r}: Length={L}, Width={W}, Height={H}",
     )
     _record(ctx, obj, "box", unit)
