@@ -3,16 +3,23 @@
 from build123d import (
     Axis,
     Circle,
+    Edge,
     Plane,
     Polyline,
+    Sketch,
     chamfer,
     extrude,
     make_face,
     revolve,
 )
+from typing import Any
 
 
-def _edges_at(shape, points, tol=1e-3):
+def _edges_at(
+    shape: Any,
+    points: list[tuple[float, float, float]],
+    tol: float = 1e-3,
+) -> list[Edge]:
     """Select edges whose midpoints match any of the target points.
 
     Used by translated Fillet / chamfer_0 features — FreeCAD references edges
@@ -41,7 +48,7 @@ sketch_profile = Polyline(
     (0, -25.4),
     (0, 4.7752),
 )
-sketch = Plane(origin=(0, 0, 0), x_dir=(1, 0, 0), z_dir=(0, -1, 0)) * (
+sketch = Sketch() + Plane(origin=(0, 0, 0), x_dir=(1, 0, 0), z_dir=(0, -1, 0)) * (
     make_face(sketch_profile)
 )
 
@@ -58,7 +65,7 @@ sketch_001_profile = Polyline(
     (-6.41580486637, 0),
     (-3.207902433185, 5.55625),
 )
-sketch_001 = Plane(
+sketch_001 = Sketch() + Plane(
     origin=(0, 0, 4.775200000000002), x_dir=(-1, 0, 0), z_dir=(0, 0, 1)
 ) * (Circle(7.41580486637) - make_face(sketch_001_profile))
 

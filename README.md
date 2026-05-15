@@ -66,7 +66,7 @@ pocket_002 = pocket_001 - extrude(sketch_002, amount=1000000)
 result = pocket_002
 ```
 
-Sketches feed each Pad/Pocket via a hoisted 1D curve and an explicit `make_face` — runs of consecutive line segments collapse into a single `Polyline`:
+Sketches feed each Pad/Pocket via a hoisted 1D curve and an explicit `make_face` — runs of consecutive line segments collapse into a single `Polyline`. The output is mypy-strict-clean:
 
 ```python
 sketch_profile = Polyline(
