@@ -34,10 +34,41 @@ test methodology, and ADRs are all in `SPEC.md` and `docs/adr/`.
 
 **Test status:** 148 tests pass across two CI lanes (a fast lane for the
 schema and comparison utility; a slower lane that runs the translator end-to-end
-against fixture files via a FreeCAD subprocess). Across 119 random Parts
-Library files sampled in four batches, **102 pass (~86%)** end-to-end with
-geometric properties matching FreeCAD's to OCCT round-off precision. The 17
+against fixture files via a FreeCAD subprocess). Across 148 random Parts
+Library files sampled in five batches, **109 pass (~74%)** end-to-end with
+geometric properties matching FreeCAD's to OCCT round-off precision. The
 failures are documented per-batch in `tests/fixtures/*/KNOWN_ISSUES.md`.
+
+## Example: FreeCAD's PartDesign tutorial
+
+The file you get when you walk through [FreeCAD's PartDesign Bearingblock tutorial](https://wiki.freecad.org/Basic_Part_Design_Tutorial) — a D-block with a rounded hub, a rectangular trough on top, a 50 mm circular pocket through the hub, and a 12-segment stepped slot cut all the way through. Four features, 145 × 70 × 100 mm overall.
+
+| FreeCAD source | build123d translation |
+|:---:|:---:|
+| ![FreeCAD source](docs/images/partdesign_example.freecad.png) | ![build123d translation](docs/images/partdesign_example.build123d.png) |
+| `partdesign_example.FCStd` | `partdesign_example.py` (59 lines) |
+
+`fcstd2b123d` translates it to **59 lines of build123d Python**. The four feature operations read straight off the FreeCAD feature tree:
+
+```python
+# PartDesign::Pad 'Pad': length=100.0 (reversed)
+Pad = extrude(Sketch, amount=-100)
+
+# PartDesign::Pocket 'Pocket': length=15.0
+Pocket = Pad - extrude(Sketch001, amount=-15)
+
+# PartDesign::Pocket 'Pocket001': length=50.0
+Pocket001 = Pocket - extrude(Sketch003, amount=-50)
+
+# PartDesign::Pocket 'Pocket002': ThroughAll (reversed)
+Pocket002 = Pocket001 - extrude(Sketch002, amount=1000000)
+
+result = Pocket002
+```
+
+The sketches feeding each Pad/Pocket are translated above as `make_face(Line(...) + Line(...) + CenterArc(...))` chains; see the [full output](docs/examples/partdesign_example.py).
+
+STL exports of both shapes (drop into any STL viewer to confirm by eye): [FreeCAD source](docs/examples/partdesign_example.freecad.stl) · [build123d translation](docs/examples/partdesign_example.build123d.stl).
 
 ## What the output looks like
 
