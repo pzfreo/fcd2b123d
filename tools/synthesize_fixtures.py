@@ -135,6 +135,36 @@ def make_simple_pad(out: Path) -> None:
     _save(doc, out / "tier2_partdesign/simple_pad.FCStd")
 
 
+def make_body_placement(out: Path) -> None:
+    """Simple Body with non-identity Placement — #37 multi-Body Placement."""
+    doc = FreeCAD.newDocument("bodypl")
+    body = doc.addObject("PartDesign::Body", "Body")
+    sketch = body.newObject("Sketcher::SketchObject", "Profile")
+    sketch.AttachmentSupport = (body.Origin.OutList[3], [""])
+    sketch.MapMode = "FlatFace"
+    v = FreeCAD.Vector
+    sketch.addGeometry(Part.LineSegment(v(0, 0, 0), v(10, 0, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(10, 0, 0), v(10, 5, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(10, 5, 0), v(0, 5, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(0, 5, 0), v(0, 0, 0)), False)
+    for i in range(4):
+        sketch.addConstraint(
+            Sketcher.Constraint("Coincident", i, 2, (i + 1) % 4, 1)
+        )
+    sketch.addConstraint(Sketcher.Constraint("Horizontal", 0))
+    sketch.addConstraint(Sketcher.Constraint("Horizontal", 2))
+    sketch.addConstraint(Sketcher.Constraint("Vertical", 1))
+    sketch.addConstraint(Sketcher.Constraint("Vertical", 3))
+    pad = body.newObject("PartDesign::Pad", "Pad")
+    pad.Profile = sketch
+    pad.Length = 3
+    body.Placement = FreeCAD.Placement(
+        FreeCAD.Vector(50, 30, 10),
+        FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 45),
+    )
+    _save(doc, out / "tier2_partdesign/body_placement.FCStd")
+
+
 def make_pad_twolengths(out: Path) -> None:
     """Minimal fixture for #29: Pad with Type='TwoLengths' (fwd + bwd extrude)."""
     doc = FreeCAD.newDocument("pad2l")

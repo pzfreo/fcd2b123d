@@ -39,6 +39,8 @@ around arbitrary axes, Hole, Groove, sweep / loft / helix features.
 
 from __future__ import annotations
 
+import math
+
 from .context import TranslationContext
 from .emitter import TranslationUnit, format_value, vfmt
 from .errors import UnsupportedFeatureError
@@ -93,18 +95,57 @@ def _body_placement_is_identity(body) -> bool:
     )
 
 
+def _body_placement_emit(body, current_var: str) -> tuple[str, set[str], str] | None:
+    """Build a ``Pos(base) * Rot(...) * <current_var>`` expression for a
+    Body whose Placement is non-identity.
+
+    Returns ``(expr, imports, comment)`` or ``None`` for identity.
+    Composition is right-to-left: the inner ``Rot(X=…)`` is applied to
+    the body first (about Body-local origin), then the outer ``Pos`` (or
+    ``Rot(Z=…) * Rot(Y=…) * Rot(X=…)`` for multi-axis) places the body
+    in the world frame — matching FreeCAD's Placement semantics
+    (rotation about local origin, then translation).
+    """
+    p = body.Placement
+    base = (p.Base.x, p.Base.y, p.Base.z)
+    rot_nonidentity = abs(p.Rotation.Angle) > _TOL
+    base_nonidentity = any(abs(c) > _TOL for c in base)
+    if not rot_nonidentity and not base_nonidentity:
+        return None
+
+    parts: list[str] = []
+    imports: set[str] = set()
+    if base_nonidentity:
+        parts.append(f"Pos({format_value(base[0])}, {format_value(base[1])}, {format_value(base[2])})")
+        imports.add("Pos")
+    if rot_nonidentity:
+        yaw, pitch, roll = p.Rotation.toEuler()
+        # FreeCAD's toEuler is intrinsic Z-Y'-X'' (Tait-Bryan); compose
+        # Rot(Z) * Rot(Y) * Rot(X) so build123d's right-to-left
+        # composition applies Rx first, then Ry, then Rz — matching.
+        rot_parts: list[tuple[str, float]] = []
+        if abs(yaw) > _TOL:
+            rot_parts.append(("Z", yaw))
+        if abs(pitch) > _TOL:
+            rot_parts.append(("Y", pitch))
+        if abs(roll) > _TOL:
+            rot_parts.append(("X", roll))
+        if rot_parts:
+            parts.append(
+                " * ".join(f"Rot({axis}={format_value(v)})" for axis, v in rot_parts)
+            )
+            imports.add("Rot")
+    parts.append(current_var)
+    expr = " * ".join(parts)
+    return expr, imports, f"Body Placement: base={base}, rotation angle={math.degrees(p.Rotation.Angle):.3f}°"
+
+
 def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
     """Walk a PartDesign::Body and emit units in feature order.
 
     Subtractive / dressup features consume the running body shape; we track
     the last "result" variable name as we go.
     """
-    if not _body_placement_is_identity(body):
-        raise UnsupportedFeatureError(
-            body.TypeId,
-            f"{body.Label} (Body Placement non-identity; not yet supported)",
-        )
-
     units: list[TranslationUnit] = []
     current_var: str | None = None
     for child in body.Group:
@@ -175,6 +216,24 @@ def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
                 tid,
                 f"{child.Label} (feature kind not supported in tier 2/3; "
                 f"only Sketch / Pad / Pocket / Revolution / Groove / Fillet / Chamfer)",
+            )
+
+    # Wrap the body's final shape with its world Placement, when non-identity.
+    # FreeCAD's Body.Placement is applied to the body's locally-built shape;
+    # build123d's right-to-left composition mirrors this when we emit
+    # ``Pos(base) * Rot(...) * <body_var>``.
+    if current_var is not None:
+        wrap = _body_placement_emit(body, current_var)
+        if wrap is not None:
+            expr, extra_imports, comment = wrap
+            placed_var = f"{body.Name}_placed"
+            units.append(
+                TranslationUnit(
+                    var_name=placed_var,
+                    imports=extra_imports,
+                    lines=[f"{placed_var} = {expr}"],
+                    comment=comment,
+                )
             )
     return units
 
