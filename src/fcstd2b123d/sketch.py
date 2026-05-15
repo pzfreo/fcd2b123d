@@ -21,9 +21,9 @@ post-solve concrete shapes. We:
 5. If the sketch sits on a non-XY plane, wrap the final face in a
    build123d Plane derived from sketch.Placement.
 
-Unsupported in tier-2: ellipses, helix, open or multi-component sketches
-that aren't simple outer-minus-inners. (BSplines are supported via
-discretized-evaluation; see ``_emit_bspline``.)
+Unsupported in tier-2: helix, open or multi-component sketches that
+aren't simple outer-minus-inners. B-splines (Bezier-form exact, others
+via 64-sample interpolation) and ellipses are supported.
 """
 
 from __future__ import annotations
@@ -298,6 +298,35 @@ def _emit_circle(g) -> tuple[str, set[str]]:
     return f"(Pos({_fmt(cx)}, {_fmt(cy)}) * Circle({_fmt(r)}))", imports
 
 
+def _emit_ellipse(g) -> tuple[str, set[str]]:
+    """Render a Part.GeomEllipse as a build123d Ellipse face.
+
+    FreeCAD's Ellipse holds ``Center``, ``MajorRadius``, ``MinorRadius``,
+    and ``AngleXU`` — the angle (radians) the major axis makes with the
+    sketch +X axis. build123d's ``Ellipse(x_radius, y_radius)`` produces
+    an ellipse with major axis along X; ``Rot(Z=ang_deg)`` rotates it,
+    and ``Pos(cx, cy)`` places its centre. Composition is right-to-left:
+    centre last.
+    """
+    cx, cy = g.Center.x, g.Center.y
+    major = g.MajorRadius
+    minor = g.MinorRadius
+    angle_deg = math.degrees(g.AngleXU)
+    parts: list[str] = []
+    imports: set[str] = {"Ellipse"}
+    if abs(cx) > _TOL or abs(cy) > _TOL:
+        parts.append(f"Pos({_fmt(cx)}, {_fmt(cy)})")
+        imports.add("Pos")
+    if abs(angle_deg) > _TOL:
+        parts.append(f"Rot(Z={_fmt(angle_deg)})")
+        imports.add("Rot")
+    parts.append(f"Ellipse({_fmt(major)}, {_fmt(minor)})")
+    expr = " * ".join(parts)
+    if len(parts) > 1:
+        expr = f"({expr})"
+    return expr, imports
+
+
 # ---------------------------------------------------------------------------
 # Loop area (for outer-vs-inner classification)
 # ---------------------------------------------------------------------------
@@ -366,6 +395,10 @@ def _interior_point_of_circle(g) -> tuple[float, float]:
     return (g.Center.x, g.Center.y)
 
 
+def _interior_point_of_ellipse(g) -> tuple[float, float]:
+    return (g.Center.x, g.Center.y)
+
+
 def _chain_contains_point(chain: list, p: tuple[float, float]) -> bool:
     return _polygon_contains(_sample_chain_points(chain), p)
 
@@ -374,6 +407,23 @@ def _circle_contains_point(g, p: tuple[float, float]) -> bool:
     dx = p[0] - g.Center.x
     dy = p[1] - g.Center.y
     return dx * dx + dy * dy < g.Radius * g.Radius
+
+
+def _ellipse_contains_point(g, p: tuple[float, float]) -> bool:
+    """Point-in-ellipse test in the ellipse's local frame.
+
+    Transform ``p`` into the ellipse's centred + de-rotated frame, then
+    apply the canonical (x/a)² + (y/b)² < 1 test.
+    """
+    dx = p[0] - g.Center.x
+    dy = p[1] - g.Center.y
+    a = g.AngleXU
+    # Rotate the point into the ellipse's axis-aligned frame.
+    lx = dx * math.cos(a) + dy * math.sin(a)
+    ly = -dx * math.sin(a) + dy * math.cos(a)
+    rx = g.MajorRadius
+    ry = g.MinorRadius
+    return (lx / rx) ** 2 + (ly / ry) ** 2 < 1
 
 
 def _chain_area(chain: list) -> float:
@@ -391,12 +441,16 @@ def _circle_area(g) -> float:
     return math.pi * g.Radius * g.Radius
 
 
+def _ellipse_area(g) -> float:
+    return math.pi * g.MajorRadius * g.MinorRadius
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 
-_SUPPORTED_KINDS = {"LineSegment", "Circle", "ArcOfCircle", "BSplineCurve"}
+_SUPPORTED_KINDS = {"LineSegment", "Circle", "ArcOfCircle", "BSplineCurve", "Ellipse"}
 _CHAINABLE_KINDS = {"LineSegment", "ArcOfCircle", "BSplineCurve"}
 
 
@@ -424,12 +478,13 @@ def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
         )
 
     circles = [g for _i, g in geometry if type(g).__name__ == "Circle"]
+    ellipses = [g for _i, g in geometry if type(g).__name__ == "Ellipse"]
     chainable = [
         g for _i, g in geometry
         if type(g).__name__ in _CHAINABLE_KINDS
     ]
 
-    if not circles and not chainable:
+    if not circles and not ellipses and not chainable:
         raise UnsupportedFeatureError(
             sketch.TypeId, f"{sketch.Label} (empty sketch — no geometry)"
         )
@@ -457,6 +512,16 @@ def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
             "area": _circle_area(c),
             "interior": _interior_point_of_circle(c),
             "contains": lambda p, c=c: _circle_contains_point(c, p),
+            "curve_expr": None,
+            "expr": expr,
+            "imports": imp,
+        })
+    for e in ellipses:
+        expr, imp = _emit_ellipse(e)
+        loops.append({
+            "area": _ellipse_area(e),
+            "interior": _interior_point_of_ellipse(e),
+            "contains": lambda p, e=e: _ellipse_contains_point(e, p),
             "curve_expr": None,
             "expr": expr,
             "imports": imp,
@@ -533,6 +598,7 @@ def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
     n_lines = sum(1 for g in sketch.Geometry if type(g).__name__ == "LineSegment")
     n_arcs = sum(1 for g in sketch.Geometry if type(g).__name__ == "ArcOfCircle")
     n_circles = len(circles)
+    n_ellipses = len(ellipses)
     parts = []
     if n_lines:
         parts.append(f"{n_lines} line{'s' if n_lines != 1 else ''}")
@@ -540,6 +606,8 @@ def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
         parts.append(f"{n_arcs} arc{'s' if n_arcs != 1 else ''}")
     if n_circles:
         parts.append(f"{n_circles} circle{'s' if n_circles != 1 else ''}")
+    if n_ellipses:
+        parts.append(f"{n_ellipses} ellipse{'s' if n_ellipses != 1 else ''}")
     summary = ", ".join(parts)
 
     unit = TranslationUnit(

@@ -135,34 +135,30 @@ def make_simple_pad(out: Path) -> None:
     _save(doc, out / "tier2_partdesign/simple_pad.FCStd")
 
 
-def make_body_placement(out: Path) -> None:
-    """Simple Body with non-identity Placement — #37 multi-Body Placement."""
-    doc = FreeCAD.newDocument("bodypl")
+def make_pad_with_ellipse(out: Path) -> None:
+    """Sketch containing a single rotated Ellipse, padded — #30 ellipse support."""
+    doc = FreeCAD.newDocument("padellip")
     body = doc.addObject("PartDesign::Body", "Body")
     sketch = body.newObject("Sketcher::SketchObject", "Profile")
     sketch.AttachmentSupport = (body.Origin.OutList[3], [""])
     sketch.MapMode = "FlatFace"
     v = FreeCAD.Vector
-    sketch.addGeometry(Part.LineSegment(v(0, 0, 0), v(10, 0, 0)), False)
-    sketch.addGeometry(Part.LineSegment(v(10, 0, 0), v(10, 5, 0)), False)
-    sketch.addGeometry(Part.LineSegment(v(10, 5, 0), v(0, 5, 0)), False)
-    sketch.addGeometry(Part.LineSegment(v(0, 5, 0), v(0, 0, 0)), False)
-    for i in range(4):
-        sketch.addConstraint(
-            Sketcher.Constraint("Coincident", i, 2, (i + 1) % 4, 1)
-        )
-    sketch.addConstraint(Sketcher.Constraint("Horizontal", 0))
-    sketch.addConstraint(Sketcher.Constraint("Horizontal", 2))
-    sketch.addConstraint(Sketcher.Constraint("Vertical", 1))
-    sketch.addConstraint(Sketcher.Constraint("Vertical", 3))
+    # Ellipse: major axis aligned with +X first, then rotated 30°.
+    # Part.Ellipse(S1, S2, Center) where S1 and S2 are points on the
+    # major and minor axes respectively (so the constructor encodes
+    # both magnitudes and orientation).
+    import math
+    cx, cy = 5.0, 2.0
+    major = 12.0
+    minor = 5.0
+    ang = math.radians(30)
+    s1 = v(cx + major * math.cos(ang), cy + major * math.sin(ang), 0)
+    s2 = v(cx - minor * math.sin(ang), cy + minor * math.cos(ang), 0)
+    sketch.addGeometry(Part.Ellipse(s1, s2, v(cx, cy, 0)), False)
     pad = body.newObject("PartDesign::Pad", "Pad")
     pad.Profile = sketch
-    pad.Length = 3
-    body.Placement = FreeCAD.Placement(
-        FreeCAD.Vector(50, 30, 10),
-        FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 45),
-    )
-    _save(doc, out / "tier2_partdesign/body_placement.FCStd")
+    pad.Length = 4
+    _save(doc, out / "tier2_partdesign/pad_with_ellipse.FCStd")
 
 
 def make_pad_twolengths(out: Path) -> None:
