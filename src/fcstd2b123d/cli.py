@@ -37,14 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    # When -o is given, STEP sidecars live alongside the output .py and are
-    # namespaced by its stem. When emitting to stdout, shape-import objects
-    # have nowhere to land — the handler raises with a clear error.
-    assets_dir = args.output.parent if args.output is not None else None
-    output_stem = args.output.stem if args.output is not None else None
-    source, ctx = translate_with_context(
-        args.input, assets_dir=assets_dir, output_stem=output_stem
-    )
+    source, ctx = translate_with_context(args.input)
     if args.output is None:
         sys.stdout.write(source)
     else:

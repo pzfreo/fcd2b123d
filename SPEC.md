@@ -52,7 +52,7 @@ Cumulative coverage percentages are empirical from the Parts Library survey — 
 | 2 | `PartDesign::Body`, `Sketcher::SketchObject`, `Pad`, `Pocket`, `Revolution`, sweep/loft/helix as features, Part-workbench equivalents (`Extrusion`, `Revolution`, `Loft`, `Sweep`) | **61%** | Core PartDesign workflow. The workhorse. |
 | 3 | `Fillet`, `Chamfer`, `Draft`, `Thickness`, `Offset` | 67% | **Topological naming bites here.** Validates the FreeCAD-runtime approach. |
 | 4 | `LinearPattern`, `PolarPattern`, `Mirrored`, `MultiTransform` | 69% | Pattern features. Need transform resolution. |
-| 5 | Boolean ops (`Part::Cut/Fuse/Common`); `Part::Feature` via shape-import fallback | 82% | Multi-body interaction + the graceful-degradation path for parts without parametric history. |
+| 5 | Boolean ops (`Part::Cut/Fuse/Common`) | 82% | Multi-body interaction. `Part::Feature` and FeaturePython types are explicitly out of scope (see §13.5) — the translator refuses rather than degrading to shape-import. |
 | 6 | `Spreadsheet::Sheet` aliases + `App::VarSet` + property expressions | **99%** | The "named variables preserved" promise. Second-largest tier. |
 | 7 | Selected real designs from FreeCAD Parts Library | n/a | End-to-end validation on non-toy input. |
 
@@ -331,7 +331,7 @@ An initial run with the conservative tier map showed 88% in scope. Inspection of
 | 2 (PartDesign + Sketcher + sweep/loft/helix) | 1,535 | 48.7% | 1,946 | **60.9%** |
 | 3 (fillets / chamfers / shell / offset) | 178 | 5.6% | 2,124 | 66.5% |
 | 4 (patterns) | 88 | 2.8% | 2,212 | 69.3% |
-| 5 (booleans + `Part::Feature` shape-import fallback) | 392 | 12.4% | 2,604 | 81.5% |
+| 5 (boolean ops only — `Part::Feature` excluded per §13.5) | 220 | 7.0% | 2,344 | 73.4% |
 | 6 (`Spreadsheet::Sheet` + `App::VarSet`) | 547 | 17.4% | 3,151 | **98.7%** |
 
 Each tier release is meaningful:
@@ -353,28 +353,31 @@ The remaining 43 files (1.3%) all match the project's documented non-goals:
 
 The tool's scope is well-aligned with how the Parts Library is actually built.
 
-### 13.5 FeaturePython prevalence — degradation strategy
+### 13.5 FeaturePython and Part::Feature — explicitly out of scope
 
-**610 of the 3,151 in-scope files (21%)** contain FeaturePython extensions: community-authored parametric Python objects (gear generators, fastener parts, thread/bolt generators).
+**610 of the 3,151 in-scope files (21%)** contain FeaturePython extensions: community-authored parametric Python objects (gear generators, fastener parts, thread/bolt generators). A further ~245 files use bare `Part::Feature` (shape-imported BRep with no parametric history).
 
 - 12.6% of all files use `Part::Part2DObjectPython` (often gear profiles).
 - 8.2% use `Part::FeaturePython` (gear/fastener generators).
 - 1.0% use `App::FeaturePython`.
 
-These files are "in scope" in the sense that they contain tier-recognized operations alongside the FeaturePython parts. The FeaturePython parts themselves have no canonical translation to build123d — their parametric behaviour is custom Python code we don't have at translation time.
+**These are deliberately out of scope.** The project's contract is to produce *readable, programmable* build123d Python — code an LLM or a human engineer can pick up and modify sensibly. A FeaturePython object's geometry is driven by custom Python the translator doesn't have. The two alternatives we explicitly reject:
 
-**v1 strategy**: the same as `Part::Feature` (tier 5) — translate the resolved BRep via shape import. Geometry survives; the FeaturePython's parametric driver is lost. The emitted build123d code annotates these blocks so a reader knows the source object was flattened rather than translated.
+1. **Shape-import fallback.** Export the resolved BRep to STEP, emit `import_step("sidecar.step")`. The user could already do this themselves with FreeCAD's exporter + build123d's importer — the translator adds nothing. Worse: the resulting `.py` is opaque (no editable parameters, no comprehensible structure), depends on a sidecar file, and counts as a "pass" only in name. Any tactic that wraps a STEP round-trip falls under this prohibition.
+2. **Mechanical edge dump.** Walk the FeaturePython's evaluated wire/face, emit hundreds of `Line(...) + CenterArc(...)` calls. Same fundamental problem — the parametric story is lost and the result is unreadable.
+
+When the translator encounters one of these types, it raises `UnsupportedFeatureError`. The honest "we don't handle this yet" is preferable to a degraded substitute.
+
+A future path that **would** be acceptable is generator-aware translation: recognising a sprocket's tooth count, recovering the symmetry, emitting a `polar_pattern` of an editable tooth profile. That's real work — not yet attempted.
 
 ### 13.6 Implications
-
-The bundled-examples concern ("we can only translate 3 of the examples") is resolved. The real-world coverage is **98.7%** — the tool addresses the vast majority of actual parametric CAD work.
 
 The tier ordering in §5 is empirically validated:
 - Tier 2 is correctly identified as the workhorse.
 - Tier 6 is the second-largest tier, not a "nice to have" — the named-variable preservation investment is well-founded.
 - Tier 3's small percentage (~6 points) reflects that fillets/chamfers are common operations in many files; the work isn't about breadth, it's about correctness on a hard problem (topological naming).
 
-A graceful-degradation path is now part of the v1 surface. Including `Part::Feature` in tier 5 with the shape-import fallback adds 12 points of coverage but commits us to "translate the geometry, drop the parametric history" for arbitrary BRep inputs. This is a deliberate trade — the alternative (rejecting Part::Feature outright) would cost real coverage with no offsetting benefit.
+Realistic translator coverage on a true-random library sample sits at ~60% (seed-813 audit). The ~28% of files using `Part::Feature` / FeaturePython types contribute zero to translatable coverage by design (see §13.5).
 
 ## 14. Structured output: TranslationContext
 
