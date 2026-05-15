@@ -7,3 +7,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# FreeCAD writes timestamped backups beside .FCStd files when documents are
+# re-saved (e.g. by `tools/synthesize_fixtures.py`).
+*.FCBak

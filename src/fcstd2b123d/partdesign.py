@@ -13,6 +13,16 @@ Tier-3 scope:
   - PartDesign::Fillet — round the named edges of a parent feature.
   - PartDesign::Chamfer — bevel the named edges of a parent feature.
 
+Tier-4 scope:
+  - PartDesign::LinearPattern — N copies along an axis/direction.
+  - PartDesign::PolarPattern — N copies around a rotation axis.
+  - PartDesign::Mirrored — one mirror copy across a reference plane.
+
+Patterns work by replicating the Original feature's "delta" (the added or
+subtracted prism) at each transformed location and chaining them onto the
+running body. v1 supports a single Original that is a Pad or Pocket with
+``Type='Length'``; the Original may have Reversed and Midplane set.
+
 Edge selection for fillet/chamfer: FreeCAD references edges by index
 ('Edge8'), which only makes sense in FreeCAD's BRep evaluation. To select
 the same edges in build123d we read each referenced edge's geometric
@@ -135,6 +145,19 @@ def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
                 )
             units.extend(_translate_chamfer(child, current_var, ctx))
             current_var = child.Name
+        elif tid in (
+            "PartDesign::LinearPattern",
+            "PartDesign::PolarPattern",
+            "PartDesign::Mirrored",
+        ):
+            if current_var is None:
+                raise UnsupportedFeatureError(
+                    tid,
+                    f"{child.Label} (Pattern feature with no preceding solid in body)",
+                )
+            unit = _translate_pattern(child, current_var, ctx)
+            units.append(unit)
+            current_var = unit.var_name
         else:
             raise UnsupportedFeatureError(
                 tid,
@@ -536,6 +559,339 @@ def _translate_chamfer(
 ) -> list[TranslationUnit]:
     # PartDesign::Chamfer's main attribute is named "Size" (the bevel length).
     return _dressup_unit(cha, base_var, "chamfer", "Size", ctx, "chamfer")
+
+
+# ---------------------------------------------------------------------------
+# Pattern (LinearPattern / PolarPattern / Mirrored) — tier 4
+# ---------------------------------------------------------------------------
+
+# Body-origin plane references → build123d Plane constants (for Mirrored).
+_PLANE_OF_ORIGIN = {
+    "XY_Plane": "Plane.XY",
+    "XZ_Plane": "Plane.XZ",
+    "YZ_Plane": "Plane.YZ",
+}
+
+
+def _prism_expression(orig, ctx: TranslationContext):
+    """Build the build123d expression for a Pad/Pocket Original's prism.
+
+    Returns ``(sign, expr, imports)`` where:
+      - ``sign`` is ``'+'`` for Pad (additive) or ``'-'`` for Pocket
+        (subtractive).
+      - ``expr`` is an ``extrude(...)`` call producing the prism solid that
+        the Original added or removed at its source location.
+      - ``imports`` is the build123d names the expression references.
+
+    The pattern emit composes the original's body with i*step-translated
+    copies of this prism so each pattern copy reproduces the Original's
+    material change. Restricted to Type='Length' Pad/Pocket in v1.
+    """
+    tid = orig.TypeId
+    if tid not in ("PartDesign::Pad", "PartDesign::Pocket"):
+        raise UnsupportedFeatureError(
+            "PartDesign::Pattern",
+            f"Pattern Original is {tid!r}; v1 only supports Pad / Pocket",
+        )
+    if str(getattr(orig, "Type", "Length")) != "Length":
+        raise UnsupportedFeatureError(
+            "PartDesign::Pattern",
+            f"Pattern Original {orig.Label!r} has Type={orig.Type!r}; "
+            f"v1 only supports Type='Length'",
+        )
+
+    profile = orig.Profile
+    if isinstance(profile, (list, tuple)):
+        profile = profile[0]
+    sketch_var = profile.Name
+
+    length = _value(orig, "Length", ctx)
+    reversed_ = bool(getattr(orig, "Reversed", False))
+    midplane = bool(getattr(orig, "Midplane", False))
+
+    if midplane:
+        half = f"{length} / 2" if isinstance(length, str) else length / 2
+        expr = f"extrude({sketch_var}, amount={format_value(half)}, both=True)"
+    else:
+        if tid == "PartDesign::Pad":
+            amt = _negate(length) if reversed_ else length
+        else:  # Pocket
+            amt = length if reversed_ else _negate(length)
+        expr = f"extrude({sketch_var}, amount={format_value(amt)})"
+
+    sign = "+" if tid == "PartDesign::Pad" else "-"
+    return sign, expr, {"extrude"}
+
+
+def _resolve_direction(ref, feature):
+    """Resolve a LinearPattern Direction reference to a unit (x, y, z) tuple.
+
+    Supports:
+      * Body-origin axes (App::Line labelled X_Axis / Y_Axis / Z_Axis).
+      * Sketch H_Axis / V_Axis / N_Axis when the sketch's rotation is identity.
+    """
+    if not ref:
+        raise UnsupportedFeatureError(
+            feature.TypeId, f"{feature.Label} (Direction reference is empty)"
+        )
+    obj, subs = ref
+    sub = (subs[0] if subs else "") or ""
+
+    name = getattr(obj, "Name", "") or ""
+    label = getattr(obj, "Label", "") or ""
+    type_id = getattr(obj, "TypeId", "")
+
+    # Body-origin straight axes — the App::Line objects under BodyOrigin.
+    canonical = {
+        "X_Axis": (1.0, 0.0, 0.0),
+        "Y_Axis": (0.0, 1.0, 0.0),
+        "Z_Axis": (0.0, 0.0, 1.0),
+    }
+    for candidate in (name, label):
+        if candidate in canonical:
+            return canonical[candidate]
+
+    if type_id == "Sketcher::SketchObject":
+        return _resolve_sketch_axis(obj, sub, feature)
+
+    raise UnsupportedFeatureError(
+        feature.TypeId,
+        f"{feature.Label} (Direction {name!r}/{label!r} subelement {sub!r} "
+        f"not supported in v1)",
+    )
+
+
+def _resolve_sketch_axis(sketch, sub, feature):
+    """Map a sketch's H_Axis / V_Axis / N_Axis to a world-frame unit vector.
+
+    Restricted to sketches with identity rotation in v1 — non-axis-aligned
+    sketches would need full rotation handling that adds complexity beyond
+    the typical Parts-Library file.
+    """
+    import FreeCAD  # lazy
+
+    rot = sketch.Placement.Rotation
+    if abs(rot.Angle) > _TOL:
+        raise UnsupportedFeatureError(
+            feature.TypeId,
+            f"{feature.Label} (Sketch '{sketch.Label}' has non-identity rotation; "
+            f"v1 supports sketch axes only on axis-aligned sketches)",
+        )
+    local = {
+        "H_Axis": FreeCAD.Vector(1, 0, 0),
+        "V_Axis": FreeCAD.Vector(0, 1, 0),
+        "N_Axis": FreeCAD.Vector(0, 0, 1),
+    }.get(sub)
+    if local is None:
+        raise UnsupportedFeatureError(
+            feature.TypeId,
+            f"{feature.Label} (Sketch subelement {sub!r} not understood; "
+            f"expected H_Axis / V_Axis / N_Axis)",
+        )
+    return (float(local.x), float(local.y), float(local.z))
+
+
+def _resolve_mirror_plane(ref, feature) -> str:
+    """Resolve a Mirrored Plane reference to a build123d Plane expression.
+
+    v1 supports Body-origin App::Plane objects (XY_Plane, XZ_Plane, YZ_Plane).
+    """
+    if not ref:
+        raise UnsupportedFeatureError(
+            feature.TypeId, f"{feature.Label} (MirrorPlane reference is empty)"
+        )
+    obj, _subs = ref
+    name = getattr(obj, "Name", "") or ""
+    label = getattr(obj, "Label", "") or ""
+    for candidate in (name, label):
+        if candidate in _PLANE_OF_ORIGIN:
+            return _PLANE_OF_ORIGIN[candidate]
+    raise UnsupportedFeatureError(
+        feature.TypeId,
+        f"{feature.Label} (MirrorPlane {name!r}/{label!r} not supported; "
+        f"v1 supports Body XY_Plane / XZ_Plane / YZ_Plane only)",
+    )
+
+
+def _location_for_linear(direction, step) -> str:
+    """Build a build123d Pos(...) expression for one linear-pattern copy."""
+    dx, dy, dz = direction
+    if isinstance(step, str):
+        return f"Pos({format_value(dx)} * ({step}), {format_value(dy)} * ({step}), {format_value(dz)} * ({step}))"
+    return f"Pos({vfmt(dx * step, dy * step, dz * step)})"
+
+
+def _rotation_for_polar(direction, angle_deg) -> str:
+    """Build a build123d Rot(...) expression for one polar-pattern copy.
+
+    direction is a unit vector indicating which axis to rotate about.
+    angle_deg is signed (already reflects Reversed).
+    """
+    dx, dy, dz = direction
+    if abs(dx - 1) < _TOL and abs(dy) < _TOL and abs(dz) < _TOL:
+        return f"Rot(X={format_value(angle_deg)})"
+    if abs(dy - 1) < _TOL and abs(dx) < _TOL and abs(dz) < _TOL:
+        return f"Rot(Y={format_value(angle_deg)})"
+    if abs(dz - 1) < _TOL and abs(dx) < _TOL and abs(dy) < _TOL:
+        return f"Rot(Z={format_value(angle_deg)})"
+    # Negative axes — Rot Y=-θ is equivalent to rotating about +Y by -θ.
+    if abs(dx + 1) < _TOL and abs(dy) < _TOL and abs(dz) < _TOL:
+        return f"Rot(X={format_value(-angle_deg)})"
+    if abs(dy + 1) < _TOL and abs(dx) < _TOL and abs(dz) < _TOL:
+        return f"Rot(Y={format_value(-angle_deg)})"
+    if abs(dz + 1) < _TOL and abs(dx) < _TOL and abs(dy) < _TOL:
+        return f"Rot(Z={format_value(-angle_deg)})"
+    raise UnsupportedFeatureError(
+        "PartDesign::PolarPattern",
+        f"PolarPattern axis direction ({dx},{dy},{dz}) is non-canonical; "
+        f"v1 supports axis-aligned rotation only",
+    )
+
+
+def _quantity_value(q) -> float:
+    return float(q.Value) if hasattr(q, "Value") else float(q)
+
+
+def _linear_step(pat, occurrences: int) -> float:
+    """Per-copy distance for a LinearPattern.
+
+    Mode='length': step = Length / (Occurrences - 1).
+    Mode='offset': step = Offset (per-copy distance set explicitly).
+    """
+    if occurrences <= 1:
+        return 0.0
+    mode = str(getattr(pat, "Mode", "length"))
+    if mode == "length":
+        return _quantity_value(pat.Length) / (occurrences - 1)
+    if mode == "offset":
+        return _quantity_value(pat.Offset)
+    raise UnsupportedFeatureError(
+        pat.TypeId,
+        f"{pat.Label} (LinearPattern Mode={mode!r}; v1 supports 'length' / 'offset')",
+    )
+
+
+def _polar_step(pat, occurrences: int) -> float:
+    """Per-copy angle (degrees) for a PolarPattern.
+
+    Mode='angle' with abs(Angle) ≈ 360°: full revolution → step = Angle / Occurrences.
+    Mode='angle' partial sweep:           last copy at Angle → step = Angle / (Occurrences - 1).
+    Mode='offset': step = Offset directly.
+
+    Note ``pat.Offset`` is unreliable in Mode='angle' files (FreeCAD doesn't
+    update it when the user edits Angle / Occurrences), so we compute from
+    the source-of-truth fields instead.
+    """
+    if occurrences <= 1:
+        return 0.0
+    mode = str(getattr(pat, "Mode", "angle"))
+    if mode == "angle":
+        angle = _quantity_value(pat.Angle)
+        if abs(abs(angle) - 360.0) < _TOL:
+            return angle / occurrences
+        return angle / (occurrences - 1)
+    if mode == "offset":
+        return _quantity_value(pat.Offset)
+    raise UnsupportedFeatureError(
+        pat.TypeId,
+        f"{pat.Label} (PolarPattern Mode={mode!r}; v1 supports 'angle' / 'offset')",
+    )
+
+
+def _translate_pattern(
+    pat, current_var: str, ctx: TranslationContext
+) -> TranslationUnit:
+    """Emit a LinearPattern / PolarPattern / Mirrored.
+
+    The pattern operates on a single Original (Pad or Pocket). The Original's
+    prism is added/subtracted at i=1..N-1 transformed locations, chained onto
+    the current body shape (which already includes the i=0 case from when the
+    Original was translated earlier in body order).
+    """
+    originals = pat.Originals
+    if len(originals) != 1:
+        raise UnsupportedFeatureError(
+            pat.TypeId,
+            f"{pat.Label} ({len(originals)} Originals; v1 only supports a single Original)",
+        )
+    sign, prism_expr, prism_imports = _prism_expression(originals[0], ctx)
+
+    tid = pat.TypeId
+    imports = set(prism_imports)
+    helpers: set[str] = set()
+    extra_terms: list[str] = []
+
+    if tid == "PartDesign::LinearPattern":
+        occurrences = int(getattr(pat, "Occurrences", 1))
+        if occurrences < 1:
+            raise UnsupportedFeatureError(
+                tid, f"{pat.Label} (Occurrences={occurrences})"
+            )
+        direction = _resolve_direction(pat.Direction, pat)
+        offset = _linear_step(pat, occurrences)
+        if bool(getattr(pat, "Reversed", False)):
+            offset = -offset
+        for i in range(1, occurrences):
+            step = i * offset
+            loc = _location_for_linear(direction, step)
+            extra_terms.append(f"{loc} * {prism_expr}")
+        imports.add("Pos")
+        note = (
+            f"LinearPattern along ({direction[0]:g}, {direction[1]:g}, {direction[2]:g}), "
+            f"step={offset}, occurrences={occurrences}"
+        )
+
+    elif tid == "PartDesign::PolarPattern":
+        occurrences = int(getattr(pat, "Occurrences", 1))
+        if occurrences < 1:
+            raise UnsupportedFeatureError(
+                tid, f"{pat.Label} (Occurrences={occurrences})"
+            )
+        direction = _resolve_direction(pat.Axis, pat)
+        offset = _polar_step(pat, occurrences)
+        if bool(getattr(pat, "Reversed", False)):
+            offset = -offset
+        for i in range(1, occurrences):
+            angle = i * offset
+            rot = _rotation_for_polar(direction, angle)
+            extra_terms.append(f"{rot} * {prism_expr}")
+        imports.add("Rot")
+        note = (
+            f"PolarPattern around ({direction[0]:g}, {direction[1]:g}, {direction[2]:g}), "
+            f"step={offset}deg, occurrences={occurrences}"
+        )
+
+    else:  # PartDesign::Mirrored
+        plane_expr = _resolve_mirror_plane(pat.MirrorPlane, pat)
+        extra_terms.append(f"mirror({prism_expr}, about={plane_expr})")
+        imports.add("mirror")
+        imports.add("Plane")
+        note = f"Mirrored across {plane_expr}"
+
+    if not extra_terms:
+        # No additional copies — occurrences=1 — pattern is a no-op.
+        # Emit a trivial assignment so downstream features see the new name.
+        line = f"{pat.Name} = {current_var}"
+    else:
+        joined = f" {sign} ".join(extra_terms)
+        line = f"{pat.Name} = {current_var} {sign} {joined}"
+
+    unit = TranslationUnit(
+        var_name=pat.Name,
+        imports=imports,
+        lines=[line],
+        comment=f"{pat.TypeId} {pat.Label!r}: {note}",
+        helpers=helpers,
+    )
+    ctx.add_step(
+        feature_type="pattern",
+        feature_name=pat.Name,
+        depends_on=[current_var],
+        renamed_from_default=(pat.Label != pat.Name),
+        build123d_code=line,
+        properties=extract_properties(getattr(pat, "Shape", None)),
+    )
+    return unit
 
 
 # ---------------------------------------------------------------------------

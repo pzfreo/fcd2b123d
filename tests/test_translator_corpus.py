@@ -40,7 +40,7 @@ EXCLUDED_FROM_TEST = {
     "Oven_builtIn",
     # tier6_corpus: tier-2/3/4/5 features not yet implemented, geometry
     # mismatches, or sketch quirks.
-    "1x3-male-pin-header-right-angle-type-II",  # PartDesign::LinearPattern (tier 4)
+    "1x3-male-pin-header-right-angle-type-II",  # LinearPattern Direction is a non-axis-aligned sketch's H_Axis
     "AerosolBox",                # tier-4/5 feature beyond v1 scope
     "Foot",                      # post-Midplane geometric mismatch (~4% volume)
     "Googly_eyes",               # Sketch with Ellipse — not supported
@@ -51,7 +51,7 @@ EXCLUDED_FROM_TEST = {
     "SKxx_Linear_Rail_Shaft_Support",  # PartDesign::Hole (tier-2; unimplemented)
     "SKXX",                      # Part::Common (tier 5; unimplemented)
     "Straight_brackets",         # ReferencePocket — unknown PartDesign type
-    "T-shape_brackets",          # PartDesign::LinearPattern (tier 4)
+    "T-shape_brackets",          # PartDesign::Hole (tier-2; unimplemented)
     "TS35",                      # tier-2 feature beyond v1
     "drawing-pin",               # disconnected sketch geometry
 }
