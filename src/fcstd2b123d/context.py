@@ -26,6 +26,14 @@ class TranslationContext:
     # ParameterSet is intentionally typed as Any here to keep this module
     # free of the FreeCAD-aware parametric module's imports.
     parameters: object | None = None
+    # Directory where shape-import handlers write STEP sidecars. None when
+    # the CLI is going to stdout — handlers needing this raise a clear error
+    # explaining that ``-o`` is required for files containing FeaturePython
+    # or Part::Feature objects.
+    assets_dir: Path | None = None
+    # File stem used to namespace STEP sidecars so multiple translated files
+    # in the same directory don't collide.
+    output_stem: str | None = None
 
     def add_step(
         self,

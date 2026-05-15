@@ -17,9 +17,12 @@ from .loader import open_document
 from .parametric import extract_parameters
 from .partdesign import TIER2_HANDLERS
 from .primitives import TIER1_HANDLERS
+from .shape_import import SHAPE_IMPORT_HANDLERS
 
-# Single dispatch table across all tiers.
-HANDLERS = {**TIER1_HANDLERS, **TIER2_HANDLERS}
+# Single dispatch table across all tiers. SHAPE_IMPORT_HANDLERS is the
+# graceful-degradation path for Part::Feature and FeaturePython objects
+# whose parametric history we can't translate — see SPEC §13.5.
+HANDLERS = {**TIER1_HANDLERS, **TIER2_HANDLERS, **SHAPE_IMPORT_HANDLERS}
 
 # Document-level infrastructure types — appear in valid documents but carry
 # no translatable content. Silently skipped at the top level.
@@ -54,11 +57,23 @@ def _names_owned_by_bodies(doc) -> set[str]:
 
 def translate_with_context(
     fcstd_path: Path | str,
+    assets_dir: Path | str | None = None,
+    output_stem: str | None = None,
 ) -> tuple[str, TranslationContext]:
-    """Translate an .FCStd file. Return (build123d_source, context)."""
+    """Translate an .FCStd file. Return (build123d_source, context).
+
+    ``assets_dir`` is the directory where shape-import handlers write STEP
+    sidecars for Part::Feature / FeaturePython objects. ``output_stem``
+    namespaces the sidecar filenames. Both can be left as None when the
+    source is known not to contain shape-import objects; the relevant
+    handler raises a clear error otherwise.
+    """
     path = Path(fcstd_path)
     ctx = TranslationContext(
-        source_path=path, freecad_version=freecad_version()
+        source_path=path,
+        freecad_version=freecad_version(),
+        assets_dir=Path(assets_dir) if assets_dir is not None else None,
+        output_stem=output_stem or path.stem,
     )
     units: list[TranslationUnit] = []
     with open_document(path) as doc:
