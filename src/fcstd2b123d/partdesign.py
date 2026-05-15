@@ -75,7 +75,9 @@ def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
         if tid == "Sketcher::SketchObject":
             units.extend(translate_sketch(child, ctx))
         elif tid == "PartDesign::Pad":
-            unit = _translate_pad(child, ctx)
+            # Inside a Body, consecutive Pads chain additively — each adds
+            # material to the running body shape.
+            unit = _translate_pad(child, ctx, base_var=current_var)
             units.append(unit)
             current_var = unit.var_name
         elif tid == "PartDesign::Pocket":
@@ -121,7 +123,13 @@ def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
 # ---------------------------------------------------------------------------
 
 
-def _translate_pad(pad, ctx: TranslationContext) -> TranslationUnit:
+def _translate_pad(
+    pad, ctx: TranslationContext, base_var: str | None = None
+) -> TranslationUnit:
+    """Emit a Pad. When ``base_var`` is set, the Pad's extrusion is unioned
+    with the running body shape — that's how FreeCAD chains multiple Pads
+    inside a Body (each adds material to the previous result).
+    """
     if str(getattr(pad, "Type", "Length")) != "Length":
         raise UnsupportedFeatureError(
             pad.TypeId,
@@ -141,17 +149,24 @@ def _translate_pad(pad, ctx: TranslationContext) -> TranslationUnit:
     reversed_ = bool(getattr(pad, "Reversed", False))
     amount = -length if reversed_ else length
 
+    if base_var is None:
+        line = f"{pad.Name} = extrude({sketch_var}, amount={amount})"
+        deps = [sketch_var]
+    else:
+        line = f"{pad.Name} = {base_var} + extrude({sketch_var}, amount={amount})"
+        deps = [base_var, sketch_var]
+
     unit = TranslationUnit(
         var_name=pad.Name,
         imports={"extrude"},
-        lines=[f"{pad.Name} = extrude({sketch_var}, amount={amount})"],
+        lines=[line],
         comment=f"PartDesign::Pad {pad.Label!r}: length={length}"
                 + (" (reversed)" if reversed_ else ""),
     )
     ctx.add_step(
         feature_type="pad",
         feature_name=pad.Name,
-        depends_on=[sketch_var],
+        depends_on=deps,
         renamed_from_default=(pad.Label != pad.Name),
         build123d_code=unit.lines[0],
         properties=extract_properties(getattr(pad, "Shape", None)),
@@ -356,34 +371,50 @@ def _translate_atomic_revolution(
 # ---------------------------------------------------------------------------
 
 
-def _resolve_edge_midpoints(parent_shape, edge_names) -> list[tuple[float, float, float]]:
-    """For each 'Edge<N>' name, return the edge's midpoint in world coords.
+def _edge_midpoint(edge) -> tuple[float, float, float]:
+    """Geometric midpoint of an OCC edge in world coordinates."""
+    t = (edge.FirstParameter + edge.LastParameter) / 2.0
+    p = edge.valueAt(t)
+    return (p.x, p.y, p.z)
 
-    This is where FreeCAD does the work that pure-text parsing of an FCStd
-    cannot: it recomputes the BRep and lets us index into it by FreeCAD's own
-    internal naming. We then carry the geometric midpoint forward into the
-    emitted build123d code, where build123d selects edges by that location.
+
+def _resolve_edge_midpoints(parent_shape, edge_names) -> list[tuple[float, float, float]]:
+    """Convert FreeCAD edge / face references into geometric midpoints.
+
+    FreeCAD references shape elements by index — 'Edge<N>' picks an edge
+    directly; 'Face<N>' means "all edges of face N" (used when filleting
+    every edge of a flat surface). For 'Face<N>' we expand to the face's
+    contour edges.
+
+    The midpoints are then emitted into build123d code as the selector
+    targets — that's the mechanic ADR-0001 validates.
     """
-    midpoints = []
+    midpoints: list[tuple[float, float, float]] = []
     edges = parent_shape.Edges
-    for ename in edge_names:
-        if not ename.startswith("Edge"):
+    faces = parent_shape.Faces
+    for name in edge_names:
+        if name.startswith("Edge"):
+            idx = int(name[len("Edge"):]) - 1
+            if idx < 0 or idx >= len(edges):
+                raise UnsupportedFeatureError(
+                    "PartDesign::Fillet",
+                    f"edge index {idx + 1} out of range (shape has {len(edges)} edges)",
+                )
+            midpoints.append(_edge_midpoint(edges[idx]))
+        elif name.startswith("Face"):
+            idx = int(name[len("Face"):]) - 1
+            if idx < 0 or idx >= len(faces):
+                raise UnsupportedFeatureError(
+                    "PartDesign::Fillet",
+                    f"face index {idx + 1} out of range (shape has {len(faces)} faces)",
+                )
+            for fe in faces[idx].Edges:
+                midpoints.append(_edge_midpoint(fe))
+        else:
             raise UnsupportedFeatureError(
                 "PartDesign::Fillet",
-                f"edge reference {ename!r} not understood (expected 'Edge<N>')",
+                f"reference {name!r} not understood (expected 'Edge<N>' or 'Face<N>')",
             )
-        idx = int(ename[len("Edge"):]) - 1
-        if idx < 0 or idx >= len(edges):
-            raise UnsupportedFeatureError(
-                "PartDesign::Fillet",
-                f"edge index {idx + 1} out of range (shape has {len(edges)} edges)",
-            )
-        edge = edges[idx]
-        # Edge.valueAt(param) returns the point at parameter t. The midpoint
-        # is at (FirstParameter + LastParameter) / 2.
-        t = (edge.FirstParameter + edge.LastParameter) / 2.0
-        p = edge.valueAt(t)
-        midpoints.append((p.x, p.y, p.z))
     return midpoints
 
 
@@ -474,29 +505,36 @@ def _translate_chamfer(
 
 
 def _previous_solid_in_doc(obj) -> str | None:
-    """Find the most recent solid-producing object before obj in doc order.
+    """Find the most recent solid-producing object before obj in doc order."""
+    found = _previous_solid_in_doc_with_typeid(obj)
+    return found[0] if found else None
 
-    Body-less PartDesign files don't always set ``BaseFeature`` on Pockets,
-    leaving "what does this subtract from?" implicit. The convention is "the
-    previous solid in the document" — that's what FreeCAD's old-format
-    importer assumes.
-    """
+
+def _previous_solid_in_doc_with_typeid(obj) -> tuple[str, str] | None:
+    """As above, plus the previous object's TypeId — needed because some
+    chaining rules depend on whether the previous solid came from Part or
+    PartDesign workbench (see body-less Pocket Length semantics)."""
     doc = obj.Document
-    prev: str | None = None
+    prev: tuple[str, str] | None = None
     for o in doc.Objects:
         if o.Name == obj.Name:
             return prev
         try:
             shape = getattr(o, "Shape", None)
             if shape is not None and not shape.isNull() and shape.Solids:
-                prev = o.Name
+                prev = (o.Name, o.TypeId)
         except Exception:
             pass
     return None
 
 
 def _translate_atomic_pad(pad, ctx: TranslationContext) -> list[TranslationUnit]:
-    return [_translate_pad(pad, ctx)]
+    # Top-level Pads in legacy Body-less files chain additively to the
+    # previous solid in document order (the Winch fixture from batch 2
+    # demonstrates this). A first Pad with no previous solid stays
+    # standalone (the FlatWasher case).
+    base_var = _previous_solid_in_doc(pad)
+    return [_translate_pad(pad, ctx, base_var=base_var)]
 
 
 def _translate_atomic_pocket(pocket, ctx: TranslationContext) -> list[TranslationUnit]:
@@ -546,19 +584,41 @@ def _translate_atomic_pocket(pocket, ctx: TranslationContext) -> list[Translatio
         )
         deps = [base_var, sketch_var]
     else:
-        # Body-less Length Pocket: FreeCAD produces just the extruded profile
-        # (the prismatic shape), no subtraction. Direction is -normal by
-        # default (matching the body-internal "cut into the body" convention).
+        # Body-less Length Pocket: FreeCAD's behaviour depends on the
+        # workbench of the previous solid.
+        # - Previous solid is from PartDesign (e.g. PartDesign::Revolution
+        #   in the F623ZZ Ball Bearing fixture): chain — Pocket subtracts
+        #   from the previous solid.
+        # - Previous solid is from Part workbench (e.g. Part::Revolution in
+        #   the M42 screw fixture): standalone — Pocket.Shape is just the
+        #   extruded prism, no subtraction.
+        # This is the inconsistency reported in batch 2's KNOWN_ISSUES.
         length = float(pocket.Length.Value)
         amount = length if reversed_ else -length
-        unit = TranslationUnit(
-            var_name=pocket.Name,
-            imports={"extrude"},
-            lines=[f"{pocket.Name} = extrude({sketch_var}, amount={amount})"],
-            comment=f"PartDesign::Pocket {pocket.Label!r} (body-less): length={length}"
-                    + (" (reversed)" if reversed_ else ""),
-        )
-        deps = [sketch_var]
+        prev = _previous_solid_in_doc_with_typeid(pocket)
+        if prev is not None and prev[1].startswith("PartDesign::"):
+            base_var = prev[0]
+            unit = TranslationUnit(
+                var_name=pocket.Name,
+                imports={"extrude"},
+                lines=[
+                    f"{pocket.Name} = {base_var} - extrude({sketch_var}, amount={amount})"
+                ],
+                comment=f"PartDesign::Pocket {pocket.Label!r} "
+                        f"(body-less, chained from {prev[1]}): length={length}"
+                        + (" (reversed)" if reversed_ else ""),
+            )
+            deps = [base_var, sketch_var]
+        else:
+            unit = TranslationUnit(
+                var_name=pocket.Name,
+                imports={"extrude"},
+                lines=[f"{pocket.Name} = extrude({sketch_var}, amount={amount})"],
+                comment=f"PartDesign::Pocket {pocket.Label!r} "
+                        f"(body-less, standalone): length={length}"
+                        + (" (reversed)" if reversed_ else ""),
+            )
+            deps = [sketch_var]
 
     ctx.add_step(
         feature_type="pocket",
