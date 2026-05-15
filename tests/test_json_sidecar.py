@@ -56,7 +56,7 @@ def test_sidecar_basic_shape(tmp_path):
     # Name == Label so the value is False here. Real-world files where the
     # author renamed the Label after creation will be True.
     assert isinstance(step["renamed_from_default"], bool)
-    assert "Box(10.0, 20.0, 30.0)" in step["build123d_code"]
+    assert "Box(10, 20, 30)" in step["build123d_code"]
 
     # Properties present for a 3D primitive
     props = step["properties"]

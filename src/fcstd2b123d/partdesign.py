@@ -27,7 +27,7 @@ around arbitrary axes, Hole, Groove, sweep / loft / helix features.
 from __future__ import annotations
 
 from .context import TranslationContext
-from .emitter import TranslationUnit
+from .emitter import TranslationUnit, format_value, vfmt
 from .errors import UnsupportedFeatureError
 from .freecad_properties import extract_properties
 from .sketch import translate_sketch
@@ -150,10 +150,13 @@ def _translate_pad(
     amount = -length if reversed_ else length
 
     if base_var is None:
-        line = f"{pad.Name} = extrude({sketch_var}, amount={amount})"
+        line = f"{pad.Name} = extrude({sketch_var}, amount={format_value(amount)})"
         deps = [sketch_var]
     else:
-        line = f"{pad.Name} = {base_var} + extrude({sketch_var}, amount={amount})"
+        line = (
+            f"{pad.Name} = {base_var} + "
+            f"extrude({sketch_var}, amount={format_value(amount)})"
+        )
         deps = [base_var, sketch_var]
 
     unit = TranslationUnit(
@@ -208,13 +211,16 @@ def _translate_pocket(
         amount = length if reversed_ else -length
         line = (
             f"{pocket.Name} = {base_var} - "
-            f"extrude({sketch_var}, amount={amount})"
+            f"extrude({sketch_var}, amount={format_value(amount)})"
         )
         note = "ThroughAll" + (" (reversed)" if reversed_ else "")
     else:
         length = float(pocket.Length.Value)
         amount = length if reversed_ else -length
-        line = f"{pocket.Name} = {base_var} - extrude({sketch_var}, amount={amount})"
+        line = (
+            f"{pocket.Name} = {base_var} - "
+            f"extrude({sketch_var}, amount={format_value(amount)})"
+        )
         note = f"length={length}" + (" (reversed)" if reversed_ else "")
 
     unit = TranslationUnit(
@@ -296,8 +302,8 @@ def _sketch_axis_expr(sketch, subs, rev) -> tuple[str, set[str]]:
             return axis_name, {"Axis"}
 
     return (
-        f"Axis(({origin.x}, {origin.y}, {origin.z}), "
-        f"({direction.x}, {direction.y}, {direction.z}))"
+        f"Axis(({vfmt(origin.x, origin.y, origin.z)}), "
+        f"({vfmt(direction.x, direction.y, direction.z)}))"
     ), {"Axis"}
 
 
@@ -330,13 +336,13 @@ def _translate_revolution(
     if base is None:
         line = (
             f"{rev.Name} = revolve({sketch_var}, axis={axis_expr}, "
-            f"revolution_arc={angle})"
+            f"revolution_arc={format_value(angle)})"
         )
         depends = [sketch_var]
     else:
         line = (
             f"{rev.Name} = {base} + revolve({sketch_var}, axis={axis_expr}, "
-            f"revolution_arc={angle})"
+            f"revolution_arc={format_value(angle)})"
         )
         depends = [base, sketch_var]
 
@@ -419,7 +425,7 @@ def _resolve_edge_midpoints(parent_shape, edge_names) -> list[tuple[float, float
 
 
 def _format_midpoints(midpoints: list[tuple[float, float, float]]) -> str:
-    return "[" + ", ".join(f"({x}, {y}, {z})" for x, y, z in midpoints) + "]"
+    return "[" + ", ".join(f"({vfmt(x, y, z)})" for x, y, z in midpoints) + "]"
 
 
 def _dressup_unit(
@@ -434,6 +440,7 @@ def _dressup_unit(
 
     Both reference edges of a parent feature by name and apply a single
     scalar (radius for Fillet, Size for Chamfer) to all selected edges.
+    Uses the module-level ``_edges_at`` helper for selection.
     """
     base = obj.Base  # (parent_object, [edge_names])
     if isinstance(base, (list, tuple)):
@@ -455,30 +462,31 @@ def _dressup_unit(
     midpoints_repr = _format_midpoints(midpoints)
     var = obj.Name
 
-    edge_select_line = (
-        f"_{var}_edges = ["
-        f"e for e in {base_var}.edges() "
-        f"if any((e.position_at(0.5) - Vector(*m)).length < 1e-3 "
-        f"for m in {midpoints_repr})]"
-    )
     if builder == "fillet":
-        result_line = f"{var} = {builder}(_{var}_edges, radius={radius})"
+        line = (
+            f"{var} = fillet(_edges_at({base_var}, {midpoints_repr}), "
+            f"radius={format_value(radius)})"
+        )
     else:
-        result_line = f"{var} = {builder}(_{var}_edges, length={radius})"
+        line = (
+            f"{var} = chamfer(_edges_at({base_var}, {midpoints_repr}), "
+            f"length={format_value(radius)})"
+        )
 
     unit = TranslationUnit(
         var_name=var,
-        imports={builder, "Vector"},
-        lines=[edge_select_line, result_line],
+        imports={builder},
+        lines=[line],
         comment=f"{obj.TypeId} {obj.Label!r}: "
                 f"{radius_attr.lower()}={radius} on {len(edge_names)} edges of {parent.Name}",
+        helpers={"_edges_at"},
     )
     ctx.add_step(
         feature_type=feature_type,
         feature_name=obj.Name,
         depends_on=[base_var],
         renamed_from_default=(obj.Label != obj.Name),
-        build123d_code="\n".join(unit.lines),
+        build123d_code=line,
         properties=extract_properties(getattr(obj, "Shape", None)),
     )
     return [unit]
@@ -602,7 +610,8 @@ def _translate_atomic_pocket(pocket, ctx: TranslationContext) -> list[Translatio
                 var_name=pocket.Name,
                 imports={"extrude"},
                 lines=[
-                    f"{pocket.Name} = {base_var} - extrude({sketch_var}, amount={amount})"
+                    f"{pocket.Name} = {base_var} - "
+                    f"extrude({sketch_var}, amount={format_value(amount)})"
                 ],
                 comment=f"PartDesign::Pocket {pocket.Label!r} "
                         f"(body-less, chained from {prev[1]}): length={length}"
@@ -613,7 +622,9 @@ def _translate_atomic_pocket(pocket, ctx: TranslationContext) -> list[Translatio
             unit = TranslationUnit(
                 var_name=pocket.Name,
                 imports={"extrude"},
-                lines=[f"{pocket.Name} = extrude({sketch_var}, amount={amount})"],
+                lines=[
+                    f"{pocket.Name} = extrude({sketch_var}, amount={format_value(amount)})"
+                ],
                 comment=f"PartDesign::Pocket {pocket.Label!r} "
                         f"(body-less, standalone): length={length}"
                         + (" (reversed)" if reversed_ else ""),
@@ -723,12 +734,12 @@ def _translate_part_extrusion(ext, ctx: TranslationContext) -> list[TranslationU
         and abs(ux) < 1e-9 and abs(uy) < 1e-9 and abs(uz - 1) < 1e-9
     )
     if aligns_with_z:
-        line = f"{ext.Name} = extrude({base_var}, amount={amount})"
+        line = f"{ext.Name} = extrude({base_var}, amount={format_value(amount)})"
         imports = {"extrude"}
     else:
         line = (
-            f"{ext.Name} = extrude({base_var}, amount={amount}, "
-            f"dir=({ux}, {uy}, {uz}))"
+            f"{ext.Name} = extrude({base_var}, amount={format_value(amount)}, "
+            f"dir=({vfmt(ux, uy, uz)}))"
         )
         imports = {"extrude"}
 
@@ -780,18 +791,18 @@ def _translate_part_revolution(rev, ctx: TranslationContext) -> list[Translation
         }
         key = (round(axis_vec.x, 9), round(axis_vec.y, 9), round(axis_vec.z, 9))
         axis_expr = canonical.get(key, (
-            f"Axis(({base_vec.x}, {base_vec.y}, {base_vec.z}), "
-            f"({axis_vec.x}, {axis_vec.y}, {axis_vec.z}))"
+            f"Axis(({vfmt(base_vec.x, base_vec.y, base_vec.z)}), "
+            f"({vfmt(axis_vec.x, axis_vec.y, axis_vec.z)}))"
         ))
     else:
         axis_expr = (
-            f"Axis(({base_vec.x}, {base_vec.y}, {base_vec.z}), "
-            f"({axis_vec.x}, {axis_vec.y}, {axis_vec.z}))"
+            f"Axis(({vfmt(base_vec.x, base_vec.y, base_vec.z)}), "
+            f"({vfmt(axis_vec.x, axis_vec.y, axis_vec.z)}))"
         )
 
     line = (
         f"{rev.Name} = revolve({source_var}, axis={axis_expr}, "
-        f"revolution_arc={angle})"
+        f"revolution_arc={format_value(angle)})"
     )
     unit = TranslationUnit(
         var_name=rev.Name,
