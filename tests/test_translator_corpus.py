@@ -23,6 +23,7 @@ FIXTURE_DIRS = [
     Path("tests/fixtures/tier3_corpus_b"),  # seed 137 — tier-3 random
     Path("tests/fixtures/tier3_corpus_c"),  # seed 271 — tier-3 random
     Path("tests/fixtures/tier6_corpus"),    # seed 519 — parametric (Spreadsheet)
+    Path("tests/fixtures/tier4_corpus"),    # seed 613 — uses LinearPattern/PolarPattern/Mirrored
 ]
 
 # Fixtures whose translation reveals real v1 scope limitations. They stay in
@@ -54,6 +55,37 @@ EXCLUDED_FROM_TEST = {
     "T-shape_brackets",          # PartDesign::Hole (tier-2; unimplemented)
     "TS35",                      # tier-2 feature beyond v1
     "drawing-pin",               # disconnected sketch geometry
+    # tier4_corpus: tier-4 limits (Mirror-via-DatumPlane, multi-Original
+    # PolarPattern, atomic top-level pattern, ThroughAll Original) and
+    # unrelated tier-2/3 gaps (Groove, Draft, UpToFirst/UpToFace Pocket,
+    # TwoLengths Pad, Part::Helix). See tier4_corpus/KNOWN_ISSUES.md.
+    "Sprocket_ISO606_simplex_5x2_5_z33",       # PartDesign::Groove (tier-2)
+    "Sprocket_ISO606_simplex_6x2_8_z20",       # PartDesign::Groove (tier-2)
+    "Lego_basic_Doll",                          # PartDesign::Groove (tier-2)
+    "Sprocket_ISO606_simplex_6x2_8_z36",       # PartDesign::Groove (tier-2)
+    "Water_tank_500L_flat",                     # PartDesign::Draft (tier-3 gap)
+    "DIN471_CLASS_A_M28RetainingRings",         # atomic (body-less) Mirrored (tier-4 gap)
+    "LMXXXUU",                                  # PolarPattern with 2 Originals (tier-4 limit)
+    "T8_housing_bracket",                       # Pad Type='TwoLengths' (tier-2 limit)
+    "2020x50_V_slot_profile",                   # Pocket Type='UpToFirst' (tier-2 limit)
+    "Plate_Wheel_simplex_8x3",                  # PartDesign::Groove (tier-2)
+    "Sprocket_ISO606_simplex_6x2_8_z37",       # PartDesign::Groove (tier-2)
+    "door-hinge",                               # Pattern Original Type='ThroughAll' (tier-4 limit)
+    "DA-40-XXX-TCA",                            # Mirrored with non-origin Plane (tier-4 limit)
+    "Beam-coupling-5mm-5mm",                    # Part::Helix (tier-2 gap)
+    "Sprocket_ISO606_simplex_8x3_0_z26",       # PartDesign::Groove (tier-2)
+    "Jante-Arriere",                            # atomic (body-less) PolarPattern (tier-4 gap)
+    "Sprocket_ISO606_simplex_8x3_0_z39",       # PartDesign::Groove (tier-2)
+    "Sprocket_ISO606_simplex_6x2_8_z40",       # PartDesign::Groove (tier-2)
+    "DA-63-XXX-TCA",                            # Mirrored with non-origin Plane (tier-4 limit)
+    "Sprocket_ISO606_simplex_8x3_0_z16",       # PartDesign::Groove (tier-2)
+    "DIN471_CLASS_A_M26RetainingRings",         # atomic (body-less) Mirrored (tier-4 gap)
+    "Base",                                     # Pocket Type='UpToFace' (tier-2 limit)
+    "DA-XX-XXX-TCA",                            # Mirrored with non-origin Plane (tier-4 limit)
+    "Support_Fan_CoolMaster_70mmx70mm",         # Mirrored with non-origin Plane (tier-4 limit)
+    "Sprocket_ISO606_simplex_8x3_0_z36",       # PartDesign::Groove (tier-2)
+    "45x45_mm_",                                # disconnected sketch geometry
+    "Baterry_9_volts",                          # Mirrored with non-origin Plane (tier-4 limit)
 }
 
 FIXTURES = sorted(
