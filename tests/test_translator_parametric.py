@@ -35,9 +35,14 @@ def test_parametric_defaults_match_snapshot():
     source = _translate(SPREADSHEET_BOX)
     namespace: dict = {}
     exec(source, namespace)
-    actual = extract_build123d(namespace["result"])
+    part = namespace["result"]
+    actual = extract_build123d(part)
     expected = Properties.from_file(SPREADSHEET_BOX.with_suffix(".expected.json"))
-    assert_equivalent(actual, expected)
+    assert_equivalent(
+        actual, expected,
+        actual_part=part,
+        pointcloud_path=SPREADSHEET_BOX.with_suffix(".pointcloud.json"),
+    )
 
 
 def test_parametric_override_scales_geometry():
