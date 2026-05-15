@@ -129,6 +129,129 @@ def make_box_with_fillet(out: Path) -> None:
     _save(doc, out / "tier3_filletchamfer/box_with_fillet.FCStd")
 
 
+# --- Tier 4: Patterns ---
+
+def _add_rectangle(sketch, x0, y0, x1, y1) -> None:
+    """Append a 4-edge rectangle with coincidence + H/V constraints."""
+    v = FreeCAD.Vector
+    base = len(sketch.Geometry)
+    sketch.addGeometry(Part.LineSegment(v(x0, y0, 0), v(x1, y0, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(x1, y0, 0), v(x1, y1, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(x1, y1, 0), v(x0, y1, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(x0, y1, 0), v(x0, y0, 0)), False)
+    for i in range(4):
+        sketch.addConstraint(
+            Sketcher.Constraint("Coincident", base + i, 2, base + (i + 1) % 4, 1)
+        )
+    sketch.addConstraint(Sketcher.Constraint("Horizontal", base + 0))
+    sketch.addConstraint(Sketcher.Constraint("Horizontal", base + 2))
+    sketch.addConstraint(Sketcher.Constraint("Vertical", base + 1))
+    sketch.addConstraint(Sketcher.Constraint("Vertical", base + 3))
+
+
+def _add_circle(sketch, cx, cy, r) -> None:
+    v = FreeCAD.Vector
+    sketch.addGeometry(Part.Circle(v(cx, cy, 0), v(0, 0, 1), r), False)
+
+
+def make_linear_pattern_holes(out: Path) -> None:
+    """Plate (60x20x5) with a single Pocket hole patterned 4× along +X."""
+    doc = FreeCAD.newDocument("lpattern")
+    body = doc.addObject("PartDesign::Body", "Body")
+
+    # Base plate sketch on XY
+    s1 = body.newObject("Sketcher::SketchObject", "Plate")
+    s1.AttachmentSupport = (body.Origin.OutList[3], [""])
+    s1.MapMode = "FlatFace"
+    _add_rectangle(s1, -30, -10, 30, 10)
+    pad = body.newObject("PartDesign::Pad", "Pad")
+    pad.Profile = s1
+    pad.Length = 5
+    doc.recompute()
+
+    # Hole sketch on the top face — go through the plate.
+    s2 = body.newObject("Sketcher::SketchObject", "Hole")
+    s2.AttachmentSupport = (body.Origin.OutList[3], [""])
+    s2.MapMode = "FlatFace"
+    _add_circle(s2, -22, 0, 2)
+    pocket = body.newObject("PartDesign::Pocket", "Pocket")
+    pocket.Profile = s2
+    pocket.Length = 10
+    pocket.Reversed = True  # sketch on XY (z=0); body is +Z, carve into it
+    doc.recompute()
+
+    lp = body.newObject("PartDesign::LinearPattern", "LinearPattern")
+    lp.Originals = [pocket]
+    lp.Direction = (body.Origin.OutList[0], ["X_Axis"])
+    lp.Length = 44
+    lp.Occurrences = 4
+    body.Tip = lp
+    _save(doc, out / "tier4_patterns/linear_pattern_holes.FCStd")
+
+
+def make_polar_pattern_holes(out: Path) -> None:
+    """Disc with Pocket hole patterned 6× around +Z."""
+    doc = FreeCAD.newDocument("ppattern")
+    body = doc.addObject("PartDesign::Body", "Body")
+
+    s1 = body.newObject("Sketcher::SketchObject", "Disc")
+    s1.AttachmentSupport = (body.Origin.OutList[3], [""])
+    s1.MapMode = "FlatFace"
+    _add_circle(s1, 0, 0, 25)
+    pad = body.newObject("PartDesign::Pad", "Pad")
+    pad.Profile = s1
+    pad.Length = 6
+    doc.recompute()
+
+    s2 = body.newObject("Sketcher::SketchObject", "Hole")
+    s2.AttachmentSupport = (body.Origin.OutList[3], [""])
+    s2.MapMode = "FlatFace"
+    _add_circle(s2, 18, 0, 2)
+    pocket = body.newObject("PartDesign::Pocket", "Pocket")
+    pocket.Profile = s2
+    pocket.Length = 12
+    pocket.Reversed = True  # carve +Z into the body
+    doc.recompute()
+
+    pp = body.newObject("PartDesign::PolarPattern", "PolarPattern")
+    pp.Originals = [pocket]
+    pp.Axis = (body.Origin.OutList[2], ["Z_Axis"])
+    pp.Angle = 360
+    pp.Occurrences = 6
+    body.Tip = pp
+    _save(doc, out / "tier4_patterns/polar_pattern_holes.FCStd")
+
+
+def make_mirrored_tab(out: Path) -> None:
+    """Plate with an off-center tab Pad, mirrored across YZ plane."""
+    doc = FreeCAD.newDocument("mirror")
+    body = doc.addObject("PartDesign::Body", "Body")
+
+    s1 = body.newObject("Sketcher::SketchObject", "Plate")
+    s1.AttachmentSupport = (body.Origin.OutList[3], [""])
+    s1.MapMode = "FlatFace"
+    _add_rectangle(s1, -20, -10, 20, 10)
+    pad1 = body.newObject("PartDesign::Pad", "Pad")
+    pad1.Profile = s1
+    pad1.Length = 4
+    doc.recompute()
+
+    s2 = body.newObject("Sketcher::SketchObject", "Tab")
+    s2.AttachmentSupport = (body.Origin.OutList[3], [""])
+    s2.MapMode = "FlatFace"
+    _add_rectangle(s2, 12, -3, 18, 3)
+    pad2 = body.newObject("PartDesign::Pad", "Tab")
+    pad2.Profile = s2
+    pad2.Length = 8
+    doc.recompute()
+
+    mr = body.newObject("PartDesign::Mirrored", "Mirrored")
+    mr.Originals = [pad2]
+    mr.MirrorPlane = (body.Origin.OutList[5], ["YZ_Plane"])
+    body.Tip = mr
+    _save(doc, out / "tier4_patterns/mirrored_tab.FCStd")
+
+
 # --- Tier 6: Spreadsheet-driven primitive ---
 
 def make_spreadsheet_box(out: Path) -> None:
@@ -164,6 +287,9 @@ def main() -> None:
     make_torus(args.out)
     make_simple_pad(args.out)
     make_box_with_fillet(args.out)
+    make_linear_pattern_holes(args.out)
+    make_polar_pattern_holes(args.out)
+    make_mirrored_tab(args.out)
     make_spreadsheet_box(args.out)
     print("Done.")
 
