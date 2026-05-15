@@ -19,12 +19,14 @@ from tests.test_translator_tier1 import _translate
 from tests.utils.compare import assert_equivalent, extract_build123d
 from tests.utils.properties import Properties
 
-# Explicit list rather than glob: tier-2 lands incrementally, and a fixture
-# may exist in the directory before its support does. Each PR that adds a
-# tier-2 capability also adds the fixture name here.
-TIER2_FIXTURES = [
-    Path("tests/fixtures/tier2_partdesign/simple_pad.FCStd"),
-]
+# Glob both subdirectories — all current tier-2 fixtures are supported.
+# Future fixtures that hit unsupported features can be temporarily skipped via
+# an excluded-names tuple if needed.
+TIER2_FIXTURES = sorted(
+    p
+    for d in Path("tests/fixtures").glob("tier2_*")
+    for p in d.glob("*.FCStd")
+)
 
 
 @pytest.mark.parametrize("fcstd_path", TIER2_FIXTURES, ids=lambda p: p.stem)
