@@ -8,6 +8,9 @@ Tier-2 scope:
     (with Reversed). Handled both inside a Body and as a top-level atomic
     feature (some legacy library files have a free-standing Revolution at
     document level).
+  - PartDesign::Groove — subtractive revolution. Structurally a Revolution
+    but subtracts from the running body. The single biggest unimplemented
+    feature in the FreeCAD Parts Library (15.3% of in-scope files).
 
 Tier-3 scope:
   - PartDesign::Fillet — round the named edges of a parent feature.
@@ -129,6 +132,15 @@ def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
             unit = _translate_revolution(child, current_var, ctx)
             units.append(unit)
             current_var = unit.var_name
+        elif tid == "PartDesign::Groove":
+            if current_var is None:
+                raise UnsupportedFeatureError(
+                    tid,
+                    f"{child.Label} (Groove with no preceding solid in body)",
+                )
+            unit = _translate_groove(child, current_var, ctx)
+            units.append(unit)
+            current_var = unit.var_name
         elif tid == "PartDesign::Fillet":
             if current_var is None:
                 raise UnsupportedFeatureError(
@@ -162,7 +174,7 @@ def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
             raise UnsupportedFeatureError(
                 tid,
                 f"{child.Label} (feature kind not supported in tier 2/3; "
-                f"only Sketch / Pad / Pocket / Revolution / Fillet / Chamfer)",
+                f"only Sketch / Pad / Pocket / Revolution / Groove / Fillet / Chamfer)",
             )
     return units
 
@@ -257,12 +269,21 @@ def _translate_pocket(
 
     if pocket_type == "ThroughAll":
         length = _THROUGH_ALL_LENGTH
-        amount = length if reversed_ else -length
-        line = (
-            f"{pocket.Name} = {base_var} - "
-            f"extrude({sketch_var}, amount={format_value(amount)})"
-        )
-        note = "ThroughAll" + (" (reversed)" if reversed_ else "")
+        if midplane:
+            # ThroughAll + Midplane: carve effectively-infinite in both
+            # directions about the sketch plane.
+            line = (
+                f"{pocket.Name} = {base_var} - "
+                f"extrude({sketch_var}, amount={format_value(length / 2)}, both=True)"
+            )
+            note = "ThroughAll (midplane)"
+        else:
+            amount = length if reversed_ else -length
+            line = (
+                f"{pocket.Name} = {base_var} - "
+                f"extrude({sketch_var}, amount={format_value(amount)})"
+            )
+            note = "ThroughAll" + (" (reversed)" if reversed_ else "")
     else:
         length = _value(pocket, "Length", ctx)
         if midplane:
@@ -416,6 +437,64 @@ def _translate_revolution(
         renamed_from_default=(rev.Label != rev.Name),
         build123d_code=unit.lines[0],
         properties=extract_properties(getattr(rev, "Shape", None)),
+    )
+    return unit
+
+
+# ---------------------------------------------------------------------------
+# Groove — subtractive revolution (tier 2)
+# ---------------------------------------------------------------------------
+
+
+def _translate_groove(
+    grv, base: str, ctx: TranslationContext
+) -> TranslationUnit:
+    """Emit a Groove: subtract a revolved sketch from the running body.
+
+    Same property layout as Revolution (Profile / ReferenceAxis / Angle /
+    Reversed / Midplane), but the result is ``base - revolve(...)`` instead
+    of ``base + revolve(...)``. Reuses ``_axis_expr_from_reference``.
+    """
+    if str(getattr(grv, "Type", "Angle")) != "Angle":
+        raise UnsupportedFeatureError(
+            grv.TypeId,
+            f"{grv.Label} (Groove.Type={grv.Type!r}; only 'Angle' supported)",
+        )
+    if bool(getattr(grv, "Midplane", False)):
+        raise UnsupportedFeatureError(
+            grv.TypeId, f"{grv.Label} (Midplane Groove not yet supported)"
+        )
+
+    profile = grv.Profile
+    if isinstance(profile, (list, tuple)):
+        profile = profile[0]
+    sketch_var = profile.Name
+    angle = _value(grv, "Angle", ctx)
+    reversed_ = bool(getattr(grv, "Reversed", False))
+    axis_expr, axis_imports = _axis_expr_from_reference(grv)
+    if reversed_:
+        angle = _negate(angle)
+
+    imports = {"revolve"} | axis_imports
+    line = (
+        f"{grv.Name} = {base} - revolve({sketch_var}, axis={axis_expr}, "
+        f"revolution_arc={format_value(angle)})"
+    )
+
+    unit = TranslationUnit(
+        var_name=grv.Name,
+        imports=imports,
+        lines=[line],
+        comment=f"PartDesign::Groove {grv.Label!r}: angle={angle}"
+                + (" (reversed)" if reversed_ else ""),
+    )
+    ctx.add_step(
+        feature_type="groove",
+        feature_name=grv.Name,
+        depends_on=[base, sketch_var],
+        renamed_from_default=(grv.Label != grv.Name),
+        build123d_code=line,
+        properties=extract_properties(getattr(grv, "Shape", None)),
     )
     return unit
 
@@ -873,8 +952,14 @@ def _translate_pattern(
         # Emit a trivial assignment so downstream features see the new name.
         line = f"{pat.Name} = {current_var}"
     else:
-        joined = f" {sign} ".join(extra_terms)
-        line = f"{pat.Name} = {current_var} {sign} {joined}"
+        # Route through _pattern_union / _pattern_difference helpers rather
+        # than chained ``+`` / ``-``. The chained form returns a Compound
+        # without boolean fusion, which gives the wrong volume for patterns
+        # whose copies overlap (e.g. sprocket teeth meeting at the hub).
+        helper = "_pattern_union" if sign == "+" else "_pattern_difference"
+        helpers.add(helper)
+        args = ", ".join([current_var, *extra_terms])
+        line = f"{pat.Name} = {helper}({args})"
 
     unit = TranslationUnit(
         var_name=pat.Name,
