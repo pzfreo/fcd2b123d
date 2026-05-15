@@ -71,7 +71,7 @@ def _wrap(shape_expr: str, pos: str | None) -> tuple[str, set[str]]:
     return f"{pos} * {shape_expr}", {"Pos"}
 
 
-def translate_box(obj) -> TranslationUnit:
+def translate_box(obj) -> list[TranslationUnit]:
     """Part::Box → Pos(x+L/2, y+W/2, z+H/2) * Box(L, W, H).
 
     FreeCAD's Part::Box has its corner at the origin in its native frame;
@@ -87,15 +87,15 @@ def translate_box(obj) -> TranslationUnit:
         _pos_expr(px + L / 2, py + W / 2, pz + H / 2),
     )
     var = _safe_var(obj.Name)
-    return TranslationUnit(
+    return [TranslationUnit(
         var_name=var,
         imports={"Box"} | extra_imports,
         lines=[f"{var} = {expr}"],
         comment=f"Part::Box {obj.Label!r}: Length={L}, Width={W}, Height={H}",
-    )
+    )]
 
 
-def translate_cylinder(obj) -> TranslationUnit:
+def translate_cylinder(obj) -> list[TranslationUnit]:
     """Part::Cylinder → Pos(x, y, z+H/2) * Cylinder(R, H).
 
     FreeCAD's Part::Cylinder has its base at z=0; build123d's Cylinder is
@@ -112,29 +112,29 @@ def translate_cylinder(obj) -> TranslationUnit:
         _pos_expr(px, py, pz + H / 2),
     )
     var = _safe_var(obj.Name)
-    return TranslationUnit(
+    return [TranslationUnit(
         var_name=var,
         imports={"Cylinder"} | extra_imports,
         lines=[f"{var} = {expr}"],
         comment=f"Part::Cylinder {obj.Label!r}: Radius={R}, Height={H}",
-    )
+    )]
 
 
-def translate_sphere(obj) -> TranslationUnit:
+def translate_sphere(obj) -> list[TranslationUnit]:
     """Part::Sphere → Sphere(R). Both libraries centre at the origin."""
     R = float(obj.Radius.Value)
     px, py, pz = _placement_offset(obj)
     expr, extra_imports = _wrap(f"Sphere({R})", _pos_expr(px, py, pz))
     var = _safe_var(obj.Name)
-    return TranslationUnit(
+    return [TranslationUnit(
         var_name=var,
         imports={"Sphere"} | extra_imports,
         lines=[f"{var} = {expr}"],
         comment=f"Part::Sphere {obj.Label!r}: Radius={R}",
-    )
+    )]
 
 
-def translate_cone(obj) -> TranslationUnit:
+def translate_cone(obj) -> list[TranslationUnit]:
     """Part::Cone → Pos(x, y, z+H/2) * Cone(R1, R2, H).
 
     Like Cylinder, FreeCAD places the base at z=0 while build123d centres
@@ -149,27 +149,27 @@ def translate_cone(obj) -> TranslationUnit:
         _pos_expr(px, py, pz + H / 2),
     )
     var = _safe_var(obj.Name)
-    return TranslationUnit(
+    return [TranslationUnit(
         var_name=var,
         imports={"Cone"} | extra_imports,
         lines=[f"{var} = {expr}"],
         comment=f"Part::Cone {obj.Label!r}: Radius1={R1}, Radius2={R2}, Height={H}",
-    )
+    )]
 
 
-def translate_torus(obj) -> TranslationUnit:
+def translate_torus(obj) -> list[TranslationUnit]:
     """Part::Torus → Torus(R_major, R_minor). Both libraries centre at origin."""
     Rmaj = float(obj.Radius1.Value)
     Rmin = float(obj.Radius2.Value)
     px, py, pz = _placement_offset(obj)
     expr, extra_imports = _wrap(f"Torus({Rmaj}, {Rmin})", _pos_expr(px, py, pz))
     var = _safe_var(obj.Name)
-    return TranslationUnit(
+    return [TranslationUnit(
         var_name=var,
         imports={"Torus"} | extra_imports,
         lines=[f"{var} = {expr}"],
         comment=f"Part::Torus {obj.Label!r}: Radius1={Rmaj}, Radius2={Rmin}",
-    )
+    )]
 
 
 # Dispatch table — TypeId -> handler.
