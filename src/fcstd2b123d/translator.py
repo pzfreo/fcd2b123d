@@ -25,6 +25,10 @@ HANDLERS = {**TIER1_HANDLERS, **TIER2_HANDLERS}
 INFRASTRUCTURE_TYPES = {
     "App::Origin", "App::Line", "App::Plane", "App::Part",
     "App::DocumentObjectGroup",
+    # PartDesign datums that appear at document level in some legacy files
+    # (e.g. multi-Body mannequins). They're support frames for downstream
+    # features and don't translate to anything on their own.
+    "PartDesign::CoordinateSystem",
 }
 
 
