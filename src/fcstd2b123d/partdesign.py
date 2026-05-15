@@ -340,15 +340,65 @@ def _translate_pad(
 _THROUGH_ALL_LENGTH = 1_000_000.0
 
 
+def _resolve_pocket_uptoface_length(pocket) -> float:
+    """For Pocket.Type in ('UpToFirst', 'UpToFace'), compute the effective
+    carve length by inspecting the FreeCAD-evaluated body shape.
+
+    ``carved_volume = BaseFeature.Shape.Volume - Pocket.Shape.Volume``;
+    dividing by the sketch profile's area gives the depth the carve
+    actually went. This lets us emit ``UpToFirst`` / ``UpToFace`` as a
+    regular ``Type='Length'`` extrude — the translator never needs to
+    track or resolve build123d's face-selection API.
+
+    Assumes the carve is a prism (no taper, no curved bottom). Holds for
+    the way both modes are used in the library: a sketch + planar normal.
+    """
+    import Part  # lazy
+    base_feature = pocket.BaseFeature
+    if base_feature is None or not hasattr(base_feature, "Shape"):
+        raise UnsupportedFeatureError(
+            pocket.TypeId,
+            f"{pocket.Label} ({pocket.Type} Pocket without resolvable BaseFeature)",
+        )
+    base_vol = float(base_feature.Shape.Volume)
+    own_vol = float(pocket.Shape.Volume)
+    carved = base_vol - own_vol
+    if carved <= 0:
+        raise UnsupportedFeatureError(
+            pocket.TypeId,
+            f"{pocket.Label} ({pocket.Type} Pocket: carved volume non-positive — "
+            f"can't resolve effective length)",
+        )
+    profile = pocket.Profile
+    if isinstance(profile, (list, tuple)):
+        profile = profile[0]
+    try:
+        wires = profile.Shape.Wires
+        faces = [Part.Face(w) for w in wires]
+        area = sum(f.Area for f in faces)
+    except Exception as exc:
+        raise UnsupportedFeatureError(
+            pocket.TypeId,
+            f"{pocket.Label} ({pocket.Type} Pocket: can't compute "
+            f"sketch profile area — {exc})",
+        )
+    if area <= 0:
+        raise UnsupportedFeatureError(
+            pocket.TypeId,
+            f"{pocket.Label} ({pocket.Type} Pocket: zero-area sketch profile)",
+        )
+    return carved / area
+
+
 def _translate_pocket(
     pocket, base_var: str, ctx: TranslationContext
 ) -> TranslationUnit:
     pocket_type = str(getattr(pocket, "Type", "Length"))
-    if pocket_type not in {"Length", "ThroughAll"}:
+    if pocket_type not in {"Length", "ThroughAll", "UpToFirst", "UpToFace"}:
         raise UnsupportedFeatureError(
             pocket.TypeId,
             f"{pocket.Label} (Pocket.Type={pocket_type!r}; tier-2 supports "
-            f"'Length' and 'ThroughAll' only)",
+            f"'Length', 'ThroughAll', 'UpToFirst', 'UpToFace')",
         )
 
     profile = pocket.Profile
@@ -376,21 +426,28 @@ def _translate_pocket(
             )
             note = "ThroughAll" + (" (reversed)" if reversed_ else "")
     else:
-        length = _value(pocket, "Length", ctx)
+        if pocket_type in ("UpToFirst", "UpToFace"):
+            # Resolve to a numeric length by inspecting FreeCAD's evaluated
+            # body shape (BaseFeature.Volume - Pocket.Volume / sketch area).
+            length = _resolve_pocket_uptoface_length(pocket)
+            length_note = f"{pocket_type} → length={length:.4g}"
+        else:
+            length = _value(pocket, "Length", ctx)
+            length_note = f"length={length}"
         if midplane:
             half = f"{length} / 2" if isinstance(length, str) else length / 2
             line = (
                 f"{pocket.Name} = {base_var} - "
                 f"extrude({sketch_var}, amount={format_value(half)}, both=True)"
             )
-            note = f"length={length} (midplane)"
+            note = f"{length_note} (midplane)"
         else:
             amount = length if reversed_ else _negate(length)
             line = (
                 f"{pocket.Name} = {base_var} - "
                 f"extrude({sketch_var}, amount={format_value(amount)})"
             )
-            note = f"length={length}" + (" (reversed)" if reversed_ else "")
+            note = length_note + (" (reversed)" if reversed_ else "")
 
     unit = TranslationUnit(
         var_name=pocket.Name,

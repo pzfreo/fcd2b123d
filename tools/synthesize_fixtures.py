@@ -161,6 +161,52 @@ def make_pad_with_ellipse(out: Path) -> None:
     _save(doc, out / "tier2_partdesign/pad_with_ellipse.FCStd")
 
 
+def make_pocket_uptoface(out: Path) -> None:
+    """Pad + Pocket(UpToFace) — #31 UpToFace support.
+
+    Resolves carve depth at translation time from FreeCAD's evaluated
+    shape, so the emit is a regular ``Type='Length'`` Pocket.
+    """
+    doc = FreeCAD.newDocument("pktface")
+    body = doc.addObject("PartDesign::Body", "Body")
+    sketch = body.newObject("Sketcher::SketchObject", "Profile")
+    sketch.AttachmentSupport = (body.Origin.OutList[3], [""])
+    sketch.MapMode = "FlatFace"
+    v = FreeCAD.Vector
+    sketch.addGeometry(Part.LineSegment(v(0, 0, 0), v(30, 0, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(30, 0, 0), v(30, 20, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(30, 20, 0), v(0, 20, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(0, 20, 0), v(0, 0, 0)), False)
+    for i in range(4):
+        sketch.addConstraint(
+            Sketcher.Constraint("Coincident", i, 2, (i + 1) % 4, 1)
+        )
+    pad = body.newObject("PartDesign::Pad", "Pad")
+    pad.Profile = sketch
+    pad.Length = 12
+    doc.recompute()
+
+    pad_shape = pad.Shape
+    top_face_idx = None
+    bottom_face_idx = None
+    for idx, f in enumerate(pad_shape.Faces, start=1):
+        nz = f.normalAt(0, 0).z
+        if abs(nz - 1) < 1e-6:
+            top_face_idx = idx
+        elif abs(nz + 1) < 1e-6:
+            bottom_face_idx = idx
+
+    sketch2 = body.newObject("Sketcher::SketchObject", "PocketProfile")
+    sketch2.AttachmentSupport = (pad, [f"Face{top_face_idx}"])
+    sketch2.MapMode = "FlatFace"
+    sketch2.addGeometry(Part.Circle(v(15, 10, 0), v(0, 0, 1), 4), False)
+    pocket = body.newObject("PartDesign::Pocket", "Pocket")
+    pocket.Profile = sketch2
+    pocket.Type = "UpToFace"
+    pocket.UpToFace = (pad, [f"Face{bottom_face_idx}"])
+    _save(doc, out / "tier2_partdesign/pocket_uptoface.FCStd")
+
+
 def make_part_compound(out: Path) -> None:
     """Part::Compound of two Part-workbench Boxes — #28 Compound support.
 
