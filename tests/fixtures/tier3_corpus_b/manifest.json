@@ -1,0 +1,302 @@
+[
+  {
+    "fixture_stem": "U_Number_6NormalMax",
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Unified/Normal/U_Number_6/U_Number_6NormalMax.FCStd",
+    "max_tier": 1,
+    "object_count": 1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "M16NormalMean",
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Metric/Normal/M16/M16NormalMean.FCStd",
+    "max_tier": 1,
+    "object_count": 1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Screw_M1_6x10_ISO4762_8_8_A2K",
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M1,6x10 ISO4762 8,8 A2K.FCStd",
+    "max_tier": 2,
+    "object_count": 4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Screw_M3x12_ISO4762_8_8_A2K",
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M3x12 ISO4762 8,8 A2K.FCStd",
+    "max_tier": 2,
+    "object_count": 4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Mannequin_mp-dummy-1850mm-standing-003",
+    "source_path": "DummiesAndSculptures/Mannequin_mp/Mannequin_mp-dummy-1850mm-standing-003.FCStd",
+    "max_tier": 3,
+    "object_count": 296,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "M2_5NormalMean",
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Metric/Normal/M2.5/M2.5NormalMean.FCStd",
+    "max_tier": 1,
+    "object_count": 1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "M20CloseMean",
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Metric/Close/M20/M20CloseMean.FCStd",
+    "max_tier": 1,
+    "object_count": 1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Angle_Bar_80x65x10_EN10056_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10056 Unequal Angle Bars/Angle Bar 80x65x10 EN10056 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Screw_M6x180_ISO4762_8_8_A2K",
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M6x180 ISO4762 8,8 A2K.FCStd",
+    "max_tier": 2,
+    "object_count": 4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "ISO7091DIN126_CLASS_C_M45FlatWasher",
+    "source_path": "Mechanical Parts/Fasteners/Washers/Metric/ISO7091DIN126_CLASS_C_M45FlatWasher.fcstd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Rectangular_hollow_section_100x60x4_EN10219_S235JRH",
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Rectangular Hollow Sections/Rectangular hollow section 100x60x4 EN10219 S235JRH.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Screw_M24x250_ISO4762_8_8_A2K",
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M24x250 ISO4762 8,8 A2K.FCStd",
+    "max_tier": 2,
+    "object_count": 4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Round_Bar_32_EN10060_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10060 Round steel bars/Round Bar 32 EN10060 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Rectangular_hollow_section_60x40x3_2_EN10219_S235JRH",
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Rectangular Hollow Sections/Rectangular hollow section 60x40x3.2 EN10219 S235JRH.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Angle_Bar_150x100x10_EN10056_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10056 Unequal Angle Bars/Angle Bar 150x100x10 EN10056 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Screw_M6x18_ISO4762_8_8_A2K",
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M6x18 ISO4762 8,8 A2K.FCStd",
+    "max_tier": 2,
+    "object_count": 4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Winch-Model1-Horizontal-roll",
+    "source_path": "Electrical Parts/Winch/Winch-Model1-Parts/Winch-Model1-Horizontal-roll.fcstd",
+    "max_tier": 2,
+    "object_count": 6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Screw_M20x85_ISO4762_8_8_A2K",
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M20x85 ISO4762 8,8 A2K.FCStd",
+    "max_tier": 2,
+    "object_count": 4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Rectangular_hollow_section_260x180x12_5_EN10219_S235JRH",
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Rectangular Hollow Sections/Rectangular hollow section 260x180x12.5 EN10219 S235JRH.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Rectangular_hollow_section_250x150x12_EN10219_S235JRH",
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Rectangular Hollow Sections/Rectangular hollow section 250x150x12 EN10219 S235JRH.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Flat_Bar_90x8_EN10058_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10058 Flat steel bars/Flat Bar 90x8 EN10058 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Screw_M6x135_ISO4762_8_8_A2K",
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M6x135 ISO4762 8,8 A2K.FCStd",
+    "max_tier": 2,
+    "object_count": 4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "U_Number_1LooseMax",
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Unified/Loose/U_Number_1/U_Number_1LooseMax.FCStd",
+    "max_tier": 1,
+    "object_count": 1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Mannequin_mp-dummy-1850mm-standing-007",
+    "source_path": "DummiesAndSculptures/Mannequin_mp/Mannequin_mp-dummy-1850mm-standing-007.FCStd",
+    "max_tier": 3,
+    "object_count": 296,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Screw_M4x30_ISO4762_8_8_A2K",
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M4x30 ISO4762 8,8 A2K.FCStd",
+    "max_tier": 2,
+    "object_count": 4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Angle_Bar_80x60x8_EN10056_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10056 Unequal Angle Bars/Angle Bar 80x60x8 EN10056 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Angle_Bar_160x100x14_EN10056_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10056 Unequal Angle Bars/Angle Bar 160x100x14 EN10056 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Screw_M36x140_ISO4762_8_8_A2K",
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M36x140 ISO4762 8,8 A2K.FCStd",
+    "max_tier": 2,
+    "object_count": 4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "F623ZZ_Ball_Bearing",
+    "source_path": "Mechanical Parts/Bearings/F623ZZ_Ball_Bearing.fcstd",
+    "max_tier": 2,
+    "object_count": 6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Flat_Bar_150x50_EN10058_S235JR",
+    "source_path": "Mechanical Parts/Profiles EN/EN10058 Flat steel bars/Flat Bar 150x50 EN10058 S235JR.FCStd",
+    "max_tier": 2,
+    "object_count": 2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  }
+]
