@@ -27,12 +27,12 @@ test methodology, and ADRs are all in `SPEC.md` and `docs/adr/`.
 | 1 | Part-workbench primitives: Box, Cylinder, Sphere, Cone, Torus | ✅ |
 | 2 | PartDesign Body + Sketcher + Pad / Pocket / Revolution; Part::Extrusion; multi-feature chaining | ✅ |
 | 3 | Fillet / Chamfer (with `Face<N>` references) | ✅ |
-| 4 | Patterns (LinearPattern / PolarPattern / Mirrored) | ❌ |
+| 4 | Patterns (LinearPattern / PolarPattern / Mirrored) | ✅ |
 | 5 | Boolean ops between bodies (Part::Cut / Fuse / Common) | partial — `Part::Cut` and `Fuse` work via Part-workbench paths; `Common` not yet |
 | 6 | Spreadsheet preservation → function-wrapped emit | ✅ |
 | 7 | `PartDesign::Hole`, Sweep, Loft, Helix, App::VarSet | not yet |
 
-**Test status:** 143 tests pass across two CI lanes (a fast lane for the
+**Test status:** 148 tests pass across two CI lanes (a fast lane for the
 schema and comparison utility; a slower lane that runs the translator end-to-end
 against fixture files via a FreeCAD subprocess). Across 119 random Parts
 Library files sampled in four batches, **102 pass (~86%)** end-to-end with
@@ -121,6 +121,34 @@ PYTHONPATH=.conda/envs/freecad/lib \
 Add `--json-out output.features.json` to also emit a structured feature
 record per [SPEC §14](SPEC.md) — useful for downstream tooling.
 
+### Verifying the translation
+
+Translation is best-effort: edge cases in the source's tier coverage can
+slip through and produce a `.py` that runs cleanly but builds the wrong
+shape. Pass `--verify` to also emit a FreeCAD-side snapshot of the source's
+geometric properties:
+
+```bash
+# Translate AND emit verification sidecars (.expected.json + .pointcloud.json):
+PYTHONPATH=.conda/envs/freecad/lib \
+  .conda/bin/micromamba run -n freecad \
+  python -m fcstd2b123d path/to/file.FCStd -o output.py --verify
+```
+
+Then in the build123d env, confirm the emitted Python reproduces the FreeCAD
+geometry:
+
+```bash
+uv run fcstd2b123d-verify output.py path/to/file.expected.json
+```
+
+`fcstd2b123d-verify` exec's the translated Python, extracts the same
+geometric properties, and compares (with the Hausdorff backstop active
+whenever the matching `.pointcloud.json` is present). Exits 0 on PASS, 1 on
+FAIL. The two-step shape mirrors the
+[two-environment architecture](docs/adr/0001-freecad-runtime-vs-standalone-parser.md):
+each step runs in the env where its imports actually work.
+
 ## Running the tests
 
 ```bash
@@ -151,25 +179,29 @@ is what you want). See [ADR-0002](docs/adr/0002-property-based-regression-tests.
 
 ```
 src/fcstd2b123d/
-  cli.py              — `python -m fcstd2b123d`
+  cli.py              — `fcstd2b123d` (translator, FreeCAD env)
+  verify_cli.py       — `fcstd2b123d-verify` (compare emitted .py to snapshot, build123d env)
   translator.py       — top-level translate()
   loader.py           — FreeCAD document opening
   primitives.py       — tier-1 Part-workbench primitives
   sketch.py           — Sketcher (line / arc / circle, multi-loop)
-  partdesign.py       — Body / Pad / Pocket / Revolution / Fillet / Chamfer
+  partdesign.py       — Body / Pad / Pocket / Revolution / Fillet / Chamfer / patterns
   parametric.py       — Spreadsheet extraction + ExpressionEngine rewriting
   emitter.py          — code emission + black formatting
   context.py          — TranslationContext (accumulates per-step structured data)
-  freecad_properties.py — geometric property extraction (shared with snapshot tool)
+  freecad_properties.py — geometric property extraction (translator-side, lightweight)
+  snapshot.py         — FreeCAD-side property + point-cloud capture (--verify uses this)
+  verify.py           — build123d-side extraction + property comparison + Hausdorff
+  hausdorff.py        — pure-math Hausdorff distance
+  properties.py       — Properties dataclass (shared schema)
 
 docs/adr/             — architecture decision records (0001..0004)
 SPEC.md               — the project spec, including the tier plan and §13 coverage analysis
 
 tests/
-  fixtures/           — .FCStd inputs + .expected.json snapshots
-  utils/compare.py    — property comparison utility
-  snapshot.py         — FreeCAD-side tool to (re)generate snapshots
-  test_*.py           — schema, comparison, tier 1/2/3/6 translator tests, corpus tests
+  fixtures/           — .FCStd inputs + .expected.json + .pointcloud.json snapshots
+  snapshot.py         — thin shim around fcstd2b123d.snapshot (manual re-snapshot tool)
+  test_*.py           — schema, comparison, tier 1/2/3/4/6 translator tests, corpus tests
 
 data/parts-library/   — coverage database of the FreeCAD Parts Library
 

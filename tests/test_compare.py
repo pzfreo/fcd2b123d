@@ -4,8 +4,8 @@ import math
 
 import pytest
 
-from tests.utils.properties import Properties
-from tests.utils.compare import (
+from fcstd2b123d.properties import Properties
+from fcstd2b123d.verify import (
     Tolerances,
     assert_equivalent,
     compare,
@@ -115,7 +115,7 @@ build123d = pytest.importorskip("build123d")
 
 
 def test_extract_unit_cube_centered_on_origin():
-    from tests.utils.compare import extract_build123d
+    from fcstd2b123d.verify import extract_build123d
 
     box = build123d.Box(10, 10, 10)
     props = extract_build123d(box)
@@ -131,7 +131,7 @@ def test_extract_unit_cube_centered_on_origin():
 
 
 def test_extract_rectangular_box_principal_moments_distinct():
-    from tests.utils.compare import extract_build123d
+    from fcstd2b123d.verify import extract_build123d
 
     box = build123d.Box(10, 20, 30)  # 6000 mm^3
     props = extract_build123d(box)
@@ -153,7 +153,7 @@ def test_extract_then_compare_round_trip():
 
     Proves the comparison path works end-to-end on a real shape.
     """
-    from tests.utils.compare import extract_build123d
+    from fcstd2b123d.verify import extract_build123d
 
     box = build123d.Box(10, 20, 30)
     p1 = extract_build123d(box)
