@@ -672,11 +672,12 @@ def _prism_expression(orig, ctx: TranslationContext):
             "PartDesign::Pattern",
             f"Pattern Original is {tid!r}; v1 only supports Pad / Pocket",
         )
-    if str(getattr(orig, "Type", "Length")) != "Length":
+    orig_type = str(getattr(orig, "Type", "Length"))
+    if orig_type not in ("Length", "ThroughAll"):
         raise UnsupportedFeatureError(
             "PartDesign::Pattern",
             f"Pattern Original {orig.Label!r} has Type={orig.Type!r}; "
-            f"v1 only supports Type='Length'",
+            f"v1 supports Type='Length' / 'ThroughAll'",
         )
 
     profile = orig.Profile
@@ -684,9 +685,16 @@ def _prism_expression(orig, ctx: TranslationContext):
         profile = profile[0]
     sketch_var = profile.Name
 
-    length = _value(orig, "Length", ctx)
     reversed_ = bool(getattr(orig, "Reversed", False))
     midplane = bool(getattr(orig, "Midplane", False))
+
+    # ThroughAll uses the same sentinel length the standalone Pocket
+    # translator uses (matches FreeCAD's "extrude a very long prism, OCCT
+    # clips to body" pattern).
+    if orig_type == "ThroughAll":
+        length = _THROUGH_ALL_LENGTH
+    else:
+        length = _value(orig, "Length", ctx)
 
     if midplane:
         half = f"{length} / 2" if isinstance(length, str) else length / 2
@@ -773,7 +781,11 @@ def _resolve_sketch_axis(sketch, sub, feature):
 def _resolve_mirror_plane(ref, feature) -> str:
     """Resolve a Mirrored Plane reference to a build123d Plane expression.
 
-    v1 supports Body-origin App::Plane objects (XY_Plane, XZ_Plane, YZ_Plane).
+    Handles three reference kinds:
+      * Body Origin ``App::Plane`` (XY/XZ/YZ) — canonical Plane.XY etc.
+      * ``PartDesign::Plane`` (DatumPlane) — placement-derived plane.
+      * ``Sketcher::SketchObject`` — the plane the sketch is drawn on (its
+        Placement). FreeCAD treats the sketch's local XY as the mirror plane.
     """
     if not ref:
         raise UnsupportedFeatureError(
@@ -782,13 +794,54 @@ def _resolve_mirror_plane(ref, feature) -> str:
     obj, _subs = ref
     name = getattr(obj, "Name", "") or ""
     label = getattr(obj, "Label", "") or ""
+
+    # Body Origin App::Plane → Plane.XY / Plane.XZ / Plane.YZ
     for candidate in (name, label):
         if candidate in _PLANE_OF_ORIGIN:
             return _PLANE_OF_ORIGIN[candidate]
+
+    # User-created DatumPlanes (PartDesign::Plane or App::Plane*nnn*) and
+    # Sketcher sketches both expose a Placement whose +Z is the mirror normal.
+    # App::Plane is also the TypeId of the Body Origin planes — those were
+    # caught above by name lookup, so reaching here means it's a copy.
+    type_id = getattr(obj, "TypeId", "")
+    if type_id in ("PartDesign::Plane", "App::Plane", "Sketcher::SketchObject"):
+        return _plane_from_placement(obj.Placement)
+
     raise UnsupportedFeatureError(
         feature.TypeId,
-        f"{feature.Label} (MirrorPlane {name!r}/{label!r} not supported; "
-        f"v1 supports Body XY_Plane / XZ_Plane / YZ_Plane only)",
+        f"{feature.Label} (MirrorPlane {name!r}/{label!r}: TypeId={type_id!r} "
+        f"not supported; v1 handles Body Origin / App::Plane / "
+        f"PartDesign::Plane / Sketch references)",
+    )
+
+
+def _plane_from_placement(placement) -> str:
+    """Convert a FreeCAD Placement to a build123d ``Plane(...)`` expression.
+
+    The local frame's +Z is the plane normal. If the placement is identity
+    (origin at world origin, no rotation), the result is ``Plane.XY``.
+    Otherwise emit ``Plane(origin=(x, y, z), z_dir=(nx, ny, nz))``.
+    """
+    import FreeCAD
+
+    b = placement.Base
+    n = placement.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+
+    is_origin = (
+        abs(b.x) < _TOL and abs(b.y) < _TOL and abs(b.z) < _TOL
+    )
+    canonical = {
+        (1.0, 0.0, 0.0): "Plane.YZ",
+        (0.0, 1.0, 0.0): "Plane.XZ",
+        (0.0, 0.0, 1.0): "Plane.XY",
+    }
+    key = (round(n.x, 9), round(n.y, 9), round(n.z, 9))
+    if is_origin and key in canonical:
+        return canonical[key]
+    return (
+        f"Plane(origin=({vfmt(b.x, b.y, b.z)}), "
+        f"z_dir=({vfmt(n.x, n.y, n.z)}))"
     )
 
 
@@ -882,18 +935,34 @@ def _translate_pattern(
 ) -> TranslationUnit:
     """Emit a LinearPattern / PolarPattern / Mirrored.
 
-    The pattern operates on a single Original (Pad or Pocket). The Original's
-    prism is added/subtracted at i=1..N-1 transformed locations, chained onto
-    the current body shape (which already includes the i=0 case from when the
-    Original was translated earlier in body order).
+    The pattern operates on one *or more* Originals (Pad / Pocket). Each
+    Original's prism is added/subtracted at every i=1..N-1 transformed
+    location, chained onto the current body shape (which already includes
+    the i=0 case from when each Original was translated earlier in body order).
+
+    All Originals must share the same additive/subtractive sense (all Pads
+    or all Pockets) — mixed Pad+Pocket Originals are uncommon enough in the
+    Parts Library to leave for a future iteration.
     """
-    originals = pat.Originals
-    if len(originals) != 1:
+    originals = list(pat.Originals)
+    if not originals:
         raise UnsupportedFeatureError(
             pat.TypeId,
-            f"{pat.Label} ({len(originals)} Originals; v1 only supports a single Original)",
+            f"{pat.Label} (no Originals)",
         )
-    sign, prism_expr, prism_imports = _prism_expression(originals[0], ctx)
+    prisms = [_prism_expression(o, ctx) for o in originals]
+    signs = {p[0] for p in prisms}
+    if len(signs) > 1:
+        raise UnsupportedFeatureError(
+            pat.TypeId,
+            f"{pat.Label} (Originals mix Pad and Pocket; v1 requires all-additive "
+            f"or all-subtractive Originals)",
+        )
+    sign = next(iter(signs))
+    prism_exprs = [p[1] for p in prisms]
+    prism_imports: set[str] = set()
+    for _, _, imp in prisms:
+        prism_imports.update(imp)
 
     tid = pat.TypeId
     imports = set(prism_imports)
@@ -913,11 +982,13 @@ def _translate_pattern(
         for i in range(1, occurrences):
             step = i * offset
             loc = _location_for_linear(direction, step)
-            extra_terms.append(f"{loc} * {prism_expr}")
+            for prism_expr in prism_exprs:
+                extra_terms.append(f"{loc} * {prism_expr}")
         imports.add("Pos")
         note = (
             f"LinearPattern along ({direction[0]:g}, {direction[1]:g}, {direction[2]:g}), "
             f"step={offset}, occurrences={occurrences}"
+            + (f", {len(originals)} originals" if len(originals) > 1 else "")
         )
 
     elif tid == "PartDesign::PolarPattern":
@@ -933,19 +1004,25 @@ def _translate_pattern(
         for i in range(1, occurrences):
             angle = i * offset
             rot = _rotation_for_polar(direction, angle)
-            extra_terms.append(f"{rot} * {prism_expr}")
+            for prism_expr in prism_exprs:
+                extra_terms.append(f"{rot} * {prism_expr}")
         imports.add("Rot")
         note = (
             f"PolarPattern around ({direction[0]:g}, {direction[1]:g}, {direction[2]:g}), "
             f"step={offset}deg, occurrences={occurrences}"
+            + (f", {len(originals)} originals" if len(originals) > 1 else "")
         )
 
     else:  # PartDesign::Mirrored
         plane_expr = _resolve_mirror_plane(pat.MirrorPlane, pat)
-        extra_terms.append(f"mirror({prism_expr}, about={plane_expr})")
+        for prism_expr in prism_exprs:
+            extra_terms.append(f"mirror({prism_expr}, about={plane_expr})")
         imports.add("mirror")
         imports.add("Plane")
-        note = f"Mirrored across {plane_expr}"
+        note = (
+            f"Mirrored across {plane_expr}"
+            + (f", {len(originals)} originals" if len(originals) > 1 else "")
+        )
 
     if not extra_terms:
         # No additional copies — occurrences=1 — pattern is a no-op.
@@ -1145,6 +1222,22 @@ def _translate_atomic_chamfer(cha, ctx: TranslationContext) -> list[TranslationU
     return _translate_chamfer(cha, base_var, ctx)
 
 
+def _translate_atomic_pattern(pat, ctx: TranslationContext) -> list[TranslationUnit]:
+    """LinearPattern / PolarPattern / Mirrored at document level.
+
+    Older Parts Library files apply patterns to a body-less Pad/Pocket. The
+    base for the chain comes from the previous solid in document order
+    (which the Pattern's Originals reference). Mirrors ``_translate_atomic_fillet``.
+    """
+    base_var = _previous_solid_in_doc(pat)
+    if base_var is None:
+        raise UnsupportedFeatureError(
+            pat.TypeId,
+            f"{pat.Label} (atomic Pattern with no previous solid in document)",
+        )
+    return [_translate_pattern(pat, base_var, ctx)]
+
+
 # ---------------------------------------------------------------------------
 # Part workbench Extrusion / Revolution (equivalent to Pad / Revolution but
 # in the Part workbench rather than PartDesign).
@@ -1304,6 +1397,9 @@ TIER2_HANDLERS = {
     "PartDesign::Revolution": _translate_atomic_revolution,
     "PartDesign::Fillet": _translate_atomic_fillet,
     "PartDesign::Chamfer": _translate_atomic_chamfer,
+    "PartDesign::LinearPattern": _translate_atomic_pattern,
+    "PartDesign::PolarPattern": _translate_atomic_pattern,
+    "PartDesign::Mirrored": _translate_atomic_pattern,
     # Part workbench equivalents.
     "Part::Extrusion": _translate_part_extrusion,
     "Part::Revolution": _translate_part_revolution,

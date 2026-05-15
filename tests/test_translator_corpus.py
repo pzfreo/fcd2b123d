@@ -61,21 +61,20 @@ EXCLUDED_FROM_TEST = {
     # TwoLengths Pad, Part::Helix). See tier4_corpus/KNOWN_ISSUES.md.
     "Lego_basic_Doll",                          # Groove ReferenceAxis is a DatumLine (issue #25-adjacent)
     "Water_tank_500L_flat",                     # PartDesign::Draft (tier-3 gap; issue #35)
-    "DIN471_CLASS_A_M28RetainingRings",         # atomic (body-less) Mirrored (issue #24)
-    "LMXXXUU",                                  # PolarPattern with 2 Originals (issue #27)
     "T8_housing_bracket",                       # Pad Type='TwoLengths' (issue #29)
+    "door-hinge",                               # post-Mirror Fillet edge selection fails (issue #36)
+    "DIN471_CLASS_A_M26RetainingRings",         # post-Mirror Fillet edge selection fails (issue #36)
+    "DIN471_CLASS_A_M28RetainingRings",         # post-Mirror Fillet edge selection fails (issue #36)
     "2020x50_V_slot_profile",                   # Pocket Type='UpToFirst' (issue #31)
-    "door-hinge",                               # Pattern Original Type='ThroughAll' (issue #26)
-    "DA-40-XXX-TCA",                            # Mirrored with DatumPlane (issue #25)
+    "DA-40-XXX-TCA",                            # Part::Helix (issue #33) -- threaded screw
     "Beam-coupling-5mm-5mm",                    # Part::Helix (issue #33)
-    "Jante-Arriere",                            # atomic (body-less) PolarPattern (issue #24)
-    "DA-63-XXX-TCA",                            # Mirrored with DatumPlane (issue #25)
-    "DIN471_CLASS_A_M26RetainingRings",         # atomic (body-less) Mirrored (issue #24)
+    "Jante-Arriere",                            # PolarPattern axis on rotated sketch (sub-issue of #25)
+    "DA-63-XXX-TCA",                            # Part::Helix (issue #33) -- threaded screw
     "Base",                                     # Pocket Type='UpToFace' (issue #31)
-    "DA-XX-XXX-TCA",                            # Mirrored with DatumPlane (issue #25)
-    "Support_Fan_CoolMaster_70mmx70mm",         # Mirrored with DatumPlane (issue #25)
+    "DA-XX-XXX-TCA",                            # Part::Helix (issue #33) -- threaded screw
+    "Support_Fan_CoolMaster_70mmx70mm",         # PartDesign::Draft (issue #35)
+    "Baterry_9_volts",                          # Revolution axis via DatumLine (sub-issue of #25)
     "45x45_mm_",                                # disconnected sketch geometry
-    "Baterry_9_volts",                          # Mirrored with DatumPlane (issue #25)
     # Sprocket precision-edge: pass-rate within ~1-4 ppm of FreeCAD's volume
     # but just over the 1e-6 relative tolerance. The geometry is correct
     # within OCCT tessellation noise for these very-many-tooth profiles.
