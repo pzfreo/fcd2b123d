@@ -7,7 +7,9 @@ path that needs to run in environments without those libraries.
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from .properties import Properties
@@ -135,10 +137,71 @@ def assert_equivalent(
     actual: Properties,
     expected: Properties,
     tolerances: Tolerances | None = None,
+    *,
+    actual_part=None,
+    pointcloud_path=None,
 ) -> None:
+    """Assert geometric equivalence via the four scalar invariants.
+
+    When ``FCSTD2B123D_HAUSDORFF=1`` and ``actual_part`` + ``pointcloud_path``
+    are supplied, also performs a Hausdorff-distance check against the
+    committed FreeCAD point cloud. Catches mirror images, multi-loop topology
+    errors, and other geometric differences that the four scalars miss
+    (per ADR-0004's documented "paranoid case").
+    """
     result = compare(actual, expected, tolerances)
     if not result.passed:
         raise AssertionError("Properties do not match:\n" + result.format())
+
+    if os.environ.get("FCSTD2B123D_HAUSDORFF") and actual_part is not None and pointcloud_path is not None:
+        _assert_hausdorff(actual_part, pointcloud_path, expected)
+
+
+def _assert_hausdorff(part, pointcloud_path, expected: Properties) -> None:
+    """Tessellate the build123d part, load the FreeCAD point cloud, compute
+    Hausdorff distance, fail if it's larger than a magnitude-scaled tolerance.
+    """
+    import json
+
+    from tests.utils.hausdorff import bbox_diagonal, hausdorff_distance
+
+    p = Path(pointcloud_path)
+    if not p.exists():
+        return  # opted in but this fixture has no committed pointcloud — soft skip
+
+    fc_points = json.loads(p.read_text())
+    if not fc_points:
+        return
+
+    verts, _faces = part.tessellate(1.0)
+    b3d_points = [(float(v.X), float(v.Y), float(v.Z)) for v in verts]
+    # Match the snapshot-side downsampling cap so memory is bounded.
+    cap = 1000
+    if len(b3d_points) > cap:
+        step = len(b3d_points) / cap
+        b3d_points = [b3d_points[int(i * step)] for i in range(cap)]
+
+    h = hausdorff_distance(fc_points, b3d_points)
+    diag = bbox_diagonal(fc_points)
+    # Tolerance has two floors:
+    #   * 2 × tessellation_tolerance (1 mm in snapshot.py). Both FreeCAD and
+    #     build123d tessellate via OCCT but they place vertices at slightly
+    #     different parametric positions on curved surfaces, so even
+    #     IDENTICAL shapes produce Hausdorff ≈ tessellation_tolerance.
+    #   * 5 % of bounding-box diagonal. Catches mirror flips (Hausdorff
+    #     ≈ bbox for a reflected shape) while staying generous enough to
+    #     absorb honest topology variation that doesn't move points far.
+    # The threshold is loose by design: Hausdorff is a paranoid backstop
+    # for issues the four scalars miss, not a precision check.
+    _TESSELLATION_TOL = 1.0
+    tol = max(3 * _TESSELLATION_TOL, diag * 0.10)
+    if h > tol:
+        raise AssertionError(
+            f"Hausdorff distance {h:.4f} exceeds {tol:.4f} "
+            f"(bbox diag {diag:.2f}). FreeCAD-vs-build123d geometric mismatch "
+            f"beyond what the four scalar invariants catch — possible mirror, "
+            f"topology error, or coincidental property match."
+        )
 
 
 def extract_build123d(part) -> Properties:

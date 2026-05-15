@@ -87,8 +87,40 @@ def _select_target(doc):
     raise RuntimeError("No object with a Shape found in document")
 
 
+_POINTCLOUD_MAX = 1000
+
+
+def _tessellate(shape, tolerance: float = 1.0) -> list[tuple[float, float, float]]:
+    """Tessellate a FreeCAD shape and return its mesh vertices.
+
+    Used by the Hausdorff-distance fallback (paired with the .expected.json).
+    Coarse tolerance keeps file size manageable; complex shapes with too
+    many vertices are downsampled to ``_POINTCLOUD_MAX`` via stride.
+    Hausdorff between equally-sampled clouds is robust to mirror flips
+    and topology errors at the bbox scale; we don't need millions of
+    points to catch those.
+    """
+    if shape.ShapeType == "Compound":
+        if len(shape.Solids) == 1:
+            shape = shape.Solids[0]
+        elif not shape.Solids:
+            return []
+        else:
+            raise RuntimeError(
+                f"Compound contains {len(shape.Solids)} solids; multi-solid "
+                f"targets not supported in v1"
+            )
+    verts, _faces = shape.tessellate(tolerance)
+    points = [(float(v.x), float(v.y), float(v.z)) for v in verts]
+    if len(points) > _POINTCLOUD_MAX:
+        step = len(points) / _POINTCLOUD_MAX
+        points = [points[int(i * step)] for i in range(_POINTCLOUD_MAX)]
+    return points
+
+
 def snapshot(input_path: Path, output_path: Path) -> None:
     import FreeCAD
+    import json
 
     doc = FreeCAD.openDocument(str(input_path))
     try:
@@ -96,7 +128,18 @@ def snapshot(input_path: Path, output_path: Path) -> None:
         target = _select_target(doc)
         props = extract_freecad(target)
         props.to_file(output_path)
-        print(f"Wrote {output_path} (target: {target.Label} [{target.TypeId}])")
+
+        # Write the sibling point cloud for the Hausdorff fallback. Paired
+        # with the .FCStd (not the .expected.json) so the test harness can
+        # find it via ``fcstd_path.with_suffix('.pointcloud.json')``.
+        pointcloud_path = input_path.with_suffix(".pointcloud.json")
+        pointcloud = _tessellate(target.Shape)
+        pointcloud_path.write_text(json.dumps(pointcloud) + "\n")
+
+        print(
+            f"Wrote {output_path} (+ {len(pointcloud)}-vertex pointcloud), "
+            f"target: {target.Label} [{target.TypeId}]"
+        )
     finally:
         FreeCAD.closeDocument(doc.Name)
 

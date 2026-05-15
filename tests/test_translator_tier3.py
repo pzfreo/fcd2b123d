@@ -39,6 +39,11 @@ def test_tier3_translation(fcstd_path: Path):
         "Translator must bind the final shape to `result`.\n\nSource:\n" + source
     )
 
-    actual = extract_build123d(namespace["result"])
+    part = namespace["result"]
+    actual = extract_build123d(part)
     expected = Properties.from_file(fcstd_path.with_suffix(".expected.json"))
-    assert_equivalent(actual, expected)
+    assert_equivalent(
+        actual, expected,
+        actual_part=part,
+        pointcloud_path=fcstd_path.with_suffix(".pointcloud.json"),
+    )
