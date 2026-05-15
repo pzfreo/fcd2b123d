@@ -21,8 +21,9 @@ post-solve concrete shapes. We:
 5. If the sketch sits on a non-XY plane, wrap the final face in a
    build123d Plane derived from sketch.Placement.
 
-Unsupported in tier-2: splines, ellipses, B-splines, helix, open or
-multi-component sketches that aren't simple outer-minus-inners.
+Unsupported in tier-2: ellipses, helix, open or multi-component sketches
+that aren't simple outer-minus-inners. (BSplines are supported via
+discretized-evaluation; see ``_emit_bspline``.)
 """
 
 from __future__ import annotations
@@ -170,6 +171,55 @@ def _emit_arc(g, reverse: bool) -> str:
     )
 
 
+def _is_bezier_form(g) -> bool:
+    """True if a BSplineCurve is in Bezier form: a single segment with all
+    knot multiplicity at the endpoints, non-rational, non-periodic.
+
+    A degree-d BSpline in Bezier form has d+1 poles and knots
+    ``[0, 1]`` with multiplicities ``[d+1, d+1]``. These are *exactly*
+    representable as build123d ``Bezier`` curves through the same poles
+    — no discretization needed.
+    """
+    if g.isRational() or g.isPeriodic():
+        return False
+    if g.NbPoles != g.Degree + 1:
+        return False
+    mults = g.getMultiplicities()
+    expected = g.Degree + 1
+    return len(mults) == 2 and mults[0] == expected and mults[1] == expected
+
+
+def _emit_bspline(g, reverse: bool) -> str:
+    """Render a Part.GeomBSplineCurve as a build123d curve expression.
+
+    Bezier-form B-splines (single segment, degree+1 poles, knots at the
+    endpoints only, non-rational, non-periodic) emit as ``Bezier(...)``
+    through the control points — an *exact* match for the source curve.
+    Anything else falls back to a 64-sample ``Spline`` interpolation,
+    which closes within the verify harness's relative tolerance for the
+    splines that appear in the FreeCAD parts library.
+    """
+    if _is_bezier_form(g):
+        poles = [(p.x, p.y) for p in g.getPoles()]
+        if reverse:
+            poles = list(reversed(poles))
+        pts = ", ".join(f"({_fmt(x)}, {_fmt(y)})" for x, y in poles)
+        return f"Bezier([{pts}])"
+
+    fpa = g.FirstParameter
+    lpa = g.LastParameter
+    steps = 64
+    samples: list[tuple[float, float]] = []
+    for i in range(steps + 1):
+        t = fpa + (lpa - fpa) * (i / steps)
+        p = g.value(t)
+        samples.append((p.x, p.y))
+    if reverse:
+        samples.reverse()
+    pts = ", ".join(f"({_fmt(x)}, {_fmt(y)})" for x, y in samples)
+    return f"Spline([{pts}])"
+
+
 def _emit_chain_curve(chain: list) -> tuple[str, set[str]]:
     """Render a closed chain of (geom, reversed) entries as a 1D curve expression.
 
@@ -216,6 +266,13 @@ def _emit_chain_curve(chain: list) -> tuple[str, set[str]]:
             edges_expr.append(_emit_arc(chain[i][0], chain[i][1]))
             imports.add("CenterArc")
             i += 1
+        elif kind == "BSplineCurve":
+            edges_expr.append(_emit_bspline(chain[i][0], chain[i][1]))
+            if _is_bezier_form(chain[i][0]):
+                imports.add("Bezier")
+            else:
+                imports.add("Spline")
+            i += 1
         else:
             raise UnsupportedFeatureError(
                 "Sketcher::SketchObject",
@@ -247,7 +304,7 @@ def _emit_circle(g) -> tuple[str, set[str]]:
 
 
 def _sample_chain_points(chain: list) -> list[tuple[float, float]]:
-    """Sample a chained loop into a polygon. Lines exact; arcs at 16 steps."""
+    """Sample a chained loop into a polygon. Lines exact; arcs / B-splines at 16 steps."""
     pts: list[tuple[float, float]] = []
     for g, rev in chain:
         kind = type(g).__name__
@@ -268,6 +325,17 @@ def _sample_chain_points(chain: list) -> list[tuple[float, float]]:
             for i in range(steps):
                 t = fpa + sweep * (i / steps)
                 pts.append((cx + r * math.cos(t), cy + r * math.sin(t)))
+        elif kind == "BSplineCurve":
+            fpa = g.FirstParameter
+            lpa = g.LastParameter
+            steps = 16
+            for i in range(steps):
+                u = i / steps
+                if rev:
+                    u = 1 - u
+                t = fpa + (lpa - fpa) * u
+                p = g.value(t)
+                pts.append((p.x, p.y))
     return pts
 
 
@@ -328,7 +396,8 @@ def _circle_area(g) -> float:
 # ---------------------------------------------------------------------------
 
 
-_SUPPORTED_KINDS = {"LineSegment", "Circle", "ArcOfCircle"}
+_SUPPORTED_KINDS = {"LineSegment", "Circle", "ArcOfCircle", "BSplineCurve"}
+_CHAINABLE_KINDS = {"LineSegment", "ArcOfCircle", "BSplineCurve"}
 
 
 def _is_construction(sketch, idx: int) -> bool:
@@ -357,7 +426,7 @@ def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
     circles = [g for _i, g in geometry if type(g).__name__ == "Circle"]
     chainable = [
         g for _i, g in geometry
-        if type(g).__name__ in {"LineSegment", "ArcOfCircle"}
+        if type(g).__name__ in _CHAINABLE_KINDS
     ]
 
     if not circles and not chainable:
