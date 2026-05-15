@@ -13,8 +13,9 @@ way; Hausdorff distance between the two point sets is compared to a
 magnitude-scaled tolerance. Mirrored or topologically-different geometry
 shows up as a large Hausdorff even when properties agree.
 
-The check is opt-in via the FCSTD2B123D_HAUSDORFF environment variable so
-the default test run stays fast.
+The check runs by default whenever a sidecar point cloud is present. Set
+FCSTD2B123D_HAUSDORFF_SKIP=1 to opt out (e.g. for a perf-sensitive lane);
+overhead is ~4% otherwise.
 """
 
 from __future__ import annotations

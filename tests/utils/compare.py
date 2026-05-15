@@ -143,17 +143,25 @@ def assert_equivalent(
 ) -> None:
     """Assert geometric equivalence via the four scalar invariants.
 
-    When ``FCSTD2B123D_HAUSDORFF=1`` and ``actual_part`` + ``pointcloud_path``
-    are supplied, also performs a Hausdorff-distance check against the
+    When ``actual_part`` + ``pointcloud_path`` are supplied (and the sidecar
+    file exists), also performs a Hausdorff-distance check against the
     committed FreeCAD point cloud. Catches mirror images, multi-loop topology
     errors, and other geometric differences that the four scalars miss
     (per ADR-0004's documented "paranoid case").
+
+    Set ``FCSTD2B123D_HAUSDORFF_SKIP=1`` to opt out of the Hausdorff check
+    (e.g. in a perf-sensitive CI lane). The ~4% overhead is small enough that
+    default-on is worth the extra safety.
     """
     result = compare(actual, expected, tolerances)
     if not result.passed:
         raise AssertionError("Properties do not match:\n" + result.format())
 
-    if os.environ.get("FCSTD2B123D_HAUSDORFF") and actual_part is not None and pointcloud_path is not None:
+    if (
+        not os.environ.get("FCSTD2B123D_HAUSDORFF_SKIP")
+        and actual_part is not None
+        and pointcloud_path is not None
+    ):
         _assert_hausdorff(actual_part, pointcloud_path, expected)
 
 
