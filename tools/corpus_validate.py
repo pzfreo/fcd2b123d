@@ -30,13 +30,32 @@ def safe_stem(rel_path: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]", "_", base)
 
 
-def select_corpus(db: dict, n: int, max_tier: int, seed: int) -> list[dict]:
+def select_corpus(
+    db: dict,
+    n: int,
+    max_tier: int,
+    seed: int,
+    require_types: list[str] | None = None,
+    allow_tiers: set[int] | None = None,
+) -> list[dict]:
+    """Sample candidates from the coverage DB.
+
+    ``require_types`` restricts to files whose ``type_counts`` contains at least
+    one of the listed TypeIds (e.g. for the tier-4 corpus we want files that
+    actually use a pattern feature).
+
+    ``allow_tiers``, when set, overrides the default ``1..max_tier`` range. Use
+    when the supported envelope isn't a contiguous prefix — e.g. tier-4 work
+    can also handle tier-6 (Spreadsheet) files since both layers ship.
+    """
+    tier_filter = allow_tiers if allow_tiers is not None else set(range(1, max_tier + 1))
+    require_set = set(require_types or [])
     eligible = [
         r for r in db["files"]
         if r["in_scope"]
         and not r["extension_types"]
-        and r["max_tier_required"] >= 1
-        and r["max_tier_required"] <= max_tier
+        and r["max_tier_required"] in tier_filter
+        and (not require_set or any(t in r["type_counts"] for t in require_set))
     ]
     random.seed(seed)
     return random.sample(eligible, min(n, len(eligible)))
@@ -109,11 +128,30 @@ def main() -> None:
     p.add_argument("--n", type=int, default=30)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--max-tier", type=int, default=3)
+    p.add_argument(
+        "--require-type", action="append", default=None,
+        help="Restrict to files whose type_counts contains this TypeId. "
+             "Repeatable; any-match semantics.",
+    )
+    p.add_argument(
+        "--allow-tiers", type=str, default=None,
+        help="Comma-separated tier numbers that the sampler should accept "
+             "(e.g. '1,2,3,4,6' for tier-4 work with tier-6 also supported). "
+             "Overrides --max-tier when set.",
+    )
     p.add_argument("--report", type=Path, default=None)
     args = p.parse_args()
 
     db = json.loads(args.db.read_text())
-    sample = select_corpus(db, args.n, args.max_tier, args.seed)
+    allow_tiers = (
+        {int(s) for s in args.allow_tiers.split(",")}
+        if args.allow_tiers else None
+    )
+    sample = select_corpus(
+        db, args.n, args.max_tier, args.seed,
+        require_types=args.require_type,
+        allow_tiers=allow_tiers,
+    )
     print(f"Sampled {len(sample)} files (seed={args.seed}, max_tier={args.max_tier})")
 
     manifest = copy_files(sample, args.library, args.out)

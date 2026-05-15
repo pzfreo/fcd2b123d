@@ -1,0 +1,292 @@
+[
+  {
+    "fixture_stem": "Sprocket_ISO606_simplex_5x2_5_z33",
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex 5x2,5/Sprocket ISO606 simplex 5x2,5 z33.FCStd",
+    "max_tier": 6,
+    "object_count": 26,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Sprocket_ISO606_simplex_6x2_8_z20",
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex 6x2,8/Sprocket ISO606 simplex 6x2,8 z20.FCStd",
+    "max_tier": 6,
+    "object_count": 26,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Lego_basic_Doll",
+    "source_path": "Generic objects/LEGO Doll/Lego basic Doll.FCStd",
+    "max_tier": 6,
+    "object_count": 162,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Sprocket_ISO606_simplex_6x2_8_z36",
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex 6x2,8/Sprocket ISO606 simplex 6x2,8 z36.FCStd",
+    "max_tier": 6,
+    "object_count": 26,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Water_tank_500L_flat",
+    "source_path": "Pipes and tubes/Water tank 500L flat.FCStd",
+    "max_tier": 4,
+    "object_count": 18,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "DIN471_CLASS_A_M28RetainingRings",
+    "source_path": "Mechanical Parts/Fasteners/RetainingRings/Metric/DIN471_CLASS_A_M28RetainingRings.fcstd",
+    "max_tier": 4,
+    "object_count": 4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "LMXXXUU",
+    "source_path": "Mechanical Parts/Mountings/LM8UU/LMXXXUU.FCStd",
+    "max_tier": 6,
+    "object_count": 35,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "T8_housing_bracket",
+    "source_path": "Mechanical Parts/Mountings/T8_housing_bracket/T8_housing_bracket.FCStd",
+    "max_tier": 4,
+    "object_count": 19,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "2020x50_V_slot_profile",
+    "source_path": "Mechanical Parts/Mountings/2020_V-slot_Al_extrusion/2020x50_V_slot_profile.FCStd",
+    "max_tier": 4,
+    "object_count": 18,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Plate_Wheel_simplex_8x3",
+    "source_path": "Mechanical Parts/Chains/Plate Wheel/ISO 606/Simplex 8x3/Plate Wheel simplex 8x3.FCStd",
+    "max_tier": 6,
+    "object_count": 16,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Sprocket_ISO606_simplex_6x2_8_z37",
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex 6x2,8/Sprocket ISO606 simplex 6x2,8 z37.FCStd",
+    "max_tier": 6,
+    "object_count": 26,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "door-hinge",
+    "source_path": "Logistics/Shipping Containers/20_Feet_ISO_Container/door-hinge.FCStd",
+    "max_tier": 4,
+    "object_count": 18,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "DA-40-XXX-TCA",
+    "source_path": "Electro-pneumatic/Manifolds/Guss&Roch/Cylinders/DA-40-XXX-TCA.FCStd",
+    "max_tier": 6,
+    "object_count": 67,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Beam-coupling-5mm-5mm",
+    "source_path": "Mechanical Parts/Coupling/Beam-coupling-5mm-5mm.FCStd",
+    "max_tier": 4,
+    "object_count": 94,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Sprocket_ISO606_simplex_8x3_0_z26",
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex 8x3,0/Sprocket ISO606 simplex 8x3,0 z26.FCStd",
+    "max_tier": 6,
+    "object_count": 26,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Jante-Arriere",
+    "source_path": "Generic objects/Scale Models/Sol Expert/1_87/Jante-Arriere.fcstd",
+    "max_tier": 4,
+    "object_count": 13,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Sprocket_ISO606_simplex_8x3_0_z39",
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex 8x3,0/Sprocket ISO606 simplex 8x3,0 z39.FCStd",
+    "max_tier": 6,
+    "object_count": 26,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Sprocket_ISO606_simplex_6x2_8_z40",
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex 6x2,8/Sprocket ISO606 simplex 6x2,8 z40.FCStd",
+    "max_tier": 6,
+    "object_count": 26,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "door-brasket",
+    "source_path": "Logistics/Shipping Containers/20_Feet_ISO_Container/door-brasket.FCStd",
+    "max_tier": 4,
+    "object_count": 16,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "DA-63-XXX-TCA",
+    "source_path": "Electro-pneumatic/Manifolds/Guss&Roch/Cylinders/DA-63-XXX-TCA.FCStd",
+    "max_tier": 6,
+    "object_count": 67,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Sprocket_ISO606_simplex_8x3_0_z16",
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex 8x3,0/Sprocket ISO606 simplex 8x3,0 z16.FCStd",
+    "max_tier": 6,
+    "object_count": 26,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "door-wall",
+    "source_path": "Logistics/Shipping Containers/20_Feet_ISO_Container/door-wall.FCStd",
+    "max_tier": 4,
+    "object_count": 15,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "DIN471_CLASS_A_M26RetainingRings",
+    "source_path": "Mechanical Parts/Fasteners/RetainingRings/Metric/DIN471_CLASS_A_M26RetainingRings.fcstd",
+    "max_tier": 4,
+    "object_count": 4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Base",
+    "source_path": "Medical Parts/01 Biomedical/OpenLung/Parts/Base.FCStd",
+    "max_tier": 4,
+    "object_count": 26,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "DA-XX-XXX-TCA",
+    "source_path": "Electro-pneumatic/Manifolds/Guss&Roch/Cylinders/DA-XX-XXX-TCA.FCStd",
+    "max_tier": 6,
+    "object_count": 67,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Support_Fan_CoolMaster_70mmx70mm",
+    "source_path": "Electronics Parts/Fans/Support Fan CoolMaster 70mmx70mm.FCStd",
+    "max_tier": 4,
+    "object_count": 31,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Sprocket_ISO606_simplex_8x3_0_z36",
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex 8x3,0/Sprocket ISO606 simplex 8x3,0 z36.FCStd",
+    "max_tier": 6,
+    "object_count": 26,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "45x45_mm_",
+    "source_path": "Mechanical Parts/Profiles EN/Sigma profiles/45x45 mm .fcstd",
+    "max_tier": 4,
+    "object_count": 13,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  },
+  {
+    "fixture_stem": "Baterry_9_volts",
+    "source_path": "Electronics Parts/Batteries/Baterry 9 volts.FCStd",
+    "max_tier": 4,
+    "object_count": 41,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    }
+  }
+]
