@@ -15,7 +15,7 @@ emitted build123d geometry match FreeCAD's placement.
 from __future__ import annotations
 
 from .context import TranslationContext
-from .emitter import TranslationUnit
+from .emitter import TranslationUnit, format_value, vfmt
 from .errors import UnsupportedFeatureError
 from .freecad_properties import extract_properties
 
@@ -53,7 +53,7 @@ def _placement_offset(obj) -> tuple[float, float, float]:
 def _pos_expr(x: float, y: float, z: float) -> str | None:
     if x == 0 and y == 0 and z == 0:
         return None
-    return f"Pos({x}, {y}, {z})"
+    return f"Pos({vfmt(x, y, z)})"
 
 
 def _wrap(shape_expr: str, pos: str | None) -> tuple[str, set[str]]:
@@ -84,7 +84,7 @@ def translate_box(obj, ctx: TranslationContext) -> list[TranslationUnit]:
     H = float(obj.Height.Value)
     px, py, pz = _placement_offset(obj)
     expr, extra_imports = _wrap(
-        f"Box({L}, {W}, {H})",
+        f"Box({vfmt(L, W, H)})",
         _pos_expr(px + L / 2, py + W / 2, pz + H / 2),
     )
     var = _safe_var(obj.Name)
@@ -103,7 +103,7 @@ def translate_cylinder(obj, ctx: TranslationContext) -> list[TranslationUnit]:
     H = float(obj.Height.Value)
     px, py, pz = _placement_offset(obj)
     expr, extra_imports = _wrap(
-        f"Cylinder({R}, {H})",
+        f"Cylinder({vfmt(R, H)})",
         _pos_expr(px, py, pz + H / 2),
     )
     var = _safe_var(obj.Name)
@@ -120,7 +120,7 @@ def translate_cylinder(obj, ctx: TranslationContext) -> list[TranslationUnit]:
 def translate_sphere(obj, ctx: TranslationContext) -> list[TranslationUnit]:
     R = float(obj.Radius.Value)
     px, py, pz = _placement_offset(obj)
-    expr, extra_imports = _wrap(f"Sphere({R})", _pos_expr(px, py, pz))
+    expr, extra_imports = _wrap(f"Sphere({format_value(R)})", _pos_expr(px, py, pz))
     var = _safe_var(obj.Name)
     unit = TranslationUnit(
         var_name=var,
@@ -138,7 +138,7 @@ def translate_cone(obj, ctx: TranslationContext) -> list[TranslationUnit]:
     H = float(obj.Height.Value)
     px, py, pz = _placement_offset(obj)
     expr, extra_imports = _wrap(
-        f"Cone({R1}, {R2}, {H})",
+        f"Cone({vfmt(R1, R2, H)})",
         _pos_expr(px, py, pz + H / 2),
     )
     var = _safe_var(obj.Name)
@@ -156,7 +156,7 @@ def translate_torus(obj, ctx: TranslationContext) -> list[TranslationUnit]:
     Rmaj = float(obj.Radius1.Value)
     Rmin = float(obj.Radius2.Value)
     px, py, pz = _placement_offset(obj)
-    expr, extra_imports = _wrap(f"Torus({Rmaj}, {Rmin})", _pos_expr(px, py, pz))
+    expr, extra_imports = _wrap(f"Torus({vfmt(Rmaj, Rmin)})", _pos_expr(px, py, pz))
     var = _safe_var(obj.Name)
     unit = TranslationUnit(
         var_name=var,

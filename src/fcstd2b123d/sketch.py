@@ -30,7 +30,7 @@ from __future__ import annotations
 import math
 
 from .context import TranslationContext
-from .emitter import TranslationUnit
+from .emitter import TranslationUnit, format_value
 from .errors import UnsupportedFeatureError
 
 _TOL = 1e-6
@@ -66,13 +66,7 @@ def _plane_expr(placement) -> str | None:
     )
 
 
-def _fmt(v: float) -> str:
-    """Tidy float representation — strip negative zero, clamp tiny near-integers."""
-    if abs(v) < 1e-12:
-        return "0"
-    if abs(v - round(v)) < 1e-12:
-        return f"{int(round(v))}"
-    return f"{v}"
+_fmt = format_value
 
 
 # ---------------------------------------------------------------------------
