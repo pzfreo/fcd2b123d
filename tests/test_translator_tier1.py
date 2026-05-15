@@ -29,8 +29,10 @@ from tests.utils.compare import assert_equivalent, extract_build123d
 from tests.utils.properties import Properties
 
 
-FIXTURE_DIR = Path("tests/fixtures/tier1_primitives")
-FIXTURES = sorted(FIXTURE_DIR.glob("*.FCStd"))
+FIXTURE_ROOT = Path("tests/fixtures")
+FIXTURES = sorted(
+    p for d in FIXTURE_ROOT.glob("tier1_*") for p in d.glob("*.FCStd")
+)
 
 
 def _freecad_python() -> str:

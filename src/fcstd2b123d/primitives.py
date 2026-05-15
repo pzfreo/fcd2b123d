@@ -12,6 +12,7 @@ emitted build123d geometry match FreeCAD's placement.
 from __future__ import annotations
 
 from .emitter import TranslationUnit
+from .errors import UnsupportedFeatureError
 
 
 # Lazy import wrappers: FreeCAD/Part objects passed in are duck-typed (we
@@ -33,41 +34,88 @@ def _safe_var(name: str) -> str:
     return name + "_" if name in _BUILD123D_RESERVED else name
 
 
+# Tolerance for treating a Placement rotation as identity. FreeCAD stores
+# Rotation as a quaternion; .Angle returns the rotation magnitude in radians.
+_ROTATION_TOL = 1e-9
+
+
+def _placement_offset(obj) -> tuple[float, float, float]:
+    """Return (x, y, z) translation from obj.Placement.
+
+    Raises UnsupportedFeatureError if Placement.Rotation is non-identity.
+    Tier-1 v1 handles translation only — rotation will land when a fixture
+    forces the work (build123d's `Loc` + axis-angle conversion from the
+    FreeCAD quaternion is straightforward but needs its own test).
+    """
+    p = obj.Placement
+    if abs(p.Rotation.Angle) > _ROTATION_TOL:
+        raise UnsupportedFeatureError(
+            obj.TypeId,
+            f"{obj.Label} (Placement has non-identity rotation; "
+            f"angle={p.Rotation.Angle:.6f} rad — not yet handled in v1)",
+        )
+    return (p.Base.x, p.Base.y, p.Base.z)
+
+
+def _pos_expr(x: float, y: float, z: float) -> str | None:
+    """Return ``Pos(x, y, z)`` or None when the offset is zero."""
+    if x == 0 and y == 0 and z == 0:
+        return None
+    return f"Pos({x}, {y}, {z})"
+
+
+def _wrap(shape_expr: str, pos: str | None) -> tuple[str, set[str]]:
+    """Compose ``Pos(...) * shape_expr`` and return the expression + needed imports."""
+    if pos is None:
+        return shape_expr, set()
+    return f"{pos} * {shape_expr}", {"Pos"}
+
+
 def translate_box(obj) -> TranslationUnit:
-    """Part::Box → Pos(L/2, W/2, H/2) * Box(L, W, H).
+    """Part::Box → Pos(x+L/2, y+W/2, z+H/2) * Box(L, W, H).
 
     FreeCAD's Part::Box has its corner at the origin in its native frame;
-    build123d's Box is centred. The offset aligns them.
+    build123d's Box is centred. The offset accounts for that *and* the
+    Placement.Base translation.
     """
     L = float(obj.Length.Value)
     W = float(obj.Width.Value)
     H = float(obj.Height.Value)
+    px, py, pz = _placement_offset(obj)
+    expr, extra_imports = _wrap(
+        f"Box({L}, {W}, {H})",
+        _pos_expr(px + L / 2, py + W / 2, pz + H / 2),
+    )
     var = _safe_var(obj.Name)
     return TranslationUnit(
         var_name=var,
-        imports={"Box", "Pos"},
-        lines=[f"{var} = Pos({L/2}, {W/2}, {H/2}) * Box({L}, {W}, {H})"],
+        imports={"Box"} | extra_imports,
+        lines=[f"{var} = {expr}"],
         comment=f"Part::Box {obj.Label!r}: Length={L}, Width={W}, Height={H}",
     )
 
 
 def translate_cylinder(obj) -> TranslationUnit:
-    """Part::Cylinder → Pos(0, 0, H/2) * Cylinder(R, H).
+    """Part::Cylinder → Pos(x, y, z+H/2) * Cylinder(R, H).
 
     FreeCAD's Part::Cylinder has its base at z=0; build123d's Cylinder is
-    centred at the origin. Both have +Z as the axis by default.
+    centred at the origin. Both have +Z as the axis by default. Placement.Base
+    composes additively with the inherent z+H/2 offset.
 
-    Part::Cylinder's Angle (sweep) property is not handled in v1 — most
-    cylinders are full 360°. A partial cylinder would need a different
-    build123d construction (a revolved sketch).
+    The ``Angle`` sweep property (partial cylinder) is not handled in v1.
     """
     R = float(obj.Radius.Value)
     H = float(obj.Height.Value)
+    px, py, pz = _placement_offset(obj)
+    expr, extra_imports = _wrap(
+        f"Cylinder({R}, {H})",
+        _pos_expr(px, py, pz + H / 2),
+    )
     var = _safe_var(obj.Name)
     return TranslationUnit(
         var_name=var,
-        imports={"Cylinder", "Pos"},
-        lines=[f"{var} = Pos(0, 0, {H/2}) * Cylinder({R}, {H})"],
+        imports={"Cylinder"} | extra_imports,
+        lines=[f"{var} = {expr}"],
         comment=f"Part::Cylinder {obj.Label!r}: Radius={R}, Height={H}",
     )
 
@@ -75,17 +123,19 @@ def translate_cylinder(obj) -> TranslationUnit:
 def translate_sphere(obj) -> TranslationUnit:
     """Part::Sphere → Sphere(R). Both libraries centre at the origin."""
     R = float(obj.Radius.Value)
+    px, py, pz = _placement_offset(obj)
+    expr, extra_imports = _wrap(f"Sphere({R})", _pos_expr(px, py, pz))
     var = _safe_var(obj.Name)
     return TranslationUnit(
         var_name=var,
-        imports={"Sphere"},
-        lines=[f"{var} = Sphere({R})"],
+        imports={"Sphere"} | extra_imports,
+        lines=[f"{var} = {expr}"],
         comment=f"Part::Sphere {obj.Label!r}: Radius={R}",
     )
 
 
 def translate_cone(obj) -> TranslationUnit:
-    """Part::Cone → Pos(0, 0, H/2) * Cone(R1, R2, H).
+    """Part::Cone → Pos(x, y, z+H/2) * Cone(R1, R2, H).
 
     Like Cylinder, FreeCAD places the base at z=0 while build123d centres
     the geometry along its axis.
@@ -93,11 +143,16 @@ def translate_cone(obj) -> TranslationUnit:
     R1 = float(obj.Radius1.Value)
     R2 = float(obj.Radius2.Value)
     H = float(obj.Height.Value)
+    px, py, pz = _placement_offset(obj)
+    expr, extra_imports = _wrap(
+        f"Cone({R1}, {R2}, {H})",
+        _pos_expr(px, py, pz + H / 2),
+    )
     var = _safe_var(obj.Name)
     return TranslationUnit(
         var_name=var,
-        imports={"Cone", "Pos"},
-        lines=[f"{var} = Pos(0, 0, {H/2}) * Cone({R1}, {R2}, {H})"],
+        imports={"Cone"} | extra_imports,
+        lines=[f"{var} = {expr}"],
         comment=f"Part::Cone {obj.Label!r}: Radius1={R1}, Radius2={R2}, Height={H}",
     )
 
@@ -106,11 +161,13 @@ def translate_torus(obj) -> TranslationUnit:
     """Part::Torus → Torus(R_major, R_minor). Both libraries centre at origin."""
     Rmaj = float(obj.Radius1.Value)
     Rmin = float(obj.Radius2.Value)
+    px, py, pz = _placement_offset(obj)
+    expr, extra_imports = _wrap(f"Torus({Rmaj}, {Rmin})", _pos_expr(px, py, pz))
     var = _safe_var(obj.Name)
     return TranslationUnit(
         var_name=var,
-        imports={"Torus"},
-        lines=[f"{var} = Torus({Rmaj}, {Rmin})"],
+        imports={"Torus"} | extra_imports,
+        lines=[f"{var} = {expr}"],
         comment=f"Part::Torus {obj.Label!r}: Radius1={Rmaj}, Radius2={Rmin}",
     )
 
