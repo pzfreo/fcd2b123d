@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import math
 
+from .context import TranslationContext
 from .emitter import TranslationUnit
 from .errors import UnsupportedFeatureError
 
@@ -299,7 +300,7 @@ def _circle_area(g) -> float:
 _SUPPORTED_KINDS = {"LineSegment", "Circle", "ArcOfCircle"}
 
 
-def translate_sketch(sketch) -> list[TranslationUnit]:
+def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
     unsupported_kinds = {
         type(g).__name__ for g in sketch.Geometry
     } - _SUPPORTED_KINDS
@@ -398,11 +399,17 @@ def translate_sketch(sketch) -> list[TranslationUnit]:
         parts.append(f"{n_circles} circle{'s' if n_circles != 1 else ''}")
     summary = ", ".join(parts)
 
-    return [
-        TranslationUnit(
-            var_name=var,
-            imports=imports,
-            lines=[f"{var} = {full_expr}"],
-            comment=f"Sketcher::SketchObject {sketch.Label!r}: {summary} ({len(loops)} loops)",
-        )
-    ]
+    unit = TranslationUnit(
+        var_name=var,
+        imports=imports,
+        lines=[f"{var} = {full_expr}"],
+        comment=f"Sketcher::SketchObject {sketch.Label!r}: {summary} ({len(loops)} loops)",
+    )
+    ctx.add_step(
+        feature_type="sketch",
+        feature_name=sketch.Name,
+        renamed_from_default=(sketch.Label != sketch.Name),
+        build123d_code=unit.lines[0],
+        properties=None,  # sketches are 2D — no volume/MOI
+    )
+    return [unit]

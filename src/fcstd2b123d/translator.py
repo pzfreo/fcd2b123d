@@ -1,21 +1,27 @@
-"""Top-level translate(): open an FCStd, dispatch each object, render source."""
+"""Top-level translate(): open an FCStd, dispatch each object, render source.
+
+Returns the build123d Python source. When the caller also wants the
+structured TranslationContext (see SPEC §14), use ``translate_with_context``
+which returns the (source, context) pair.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+from .context import TranslationContext
 from .emitter import TranslationUnit, render_module
 from .errors import UnsupportedFeatureError
+from .freecad_properties import freecad_version
 from .loader import open_document
 from .partdesign import TIER2_HANDLERS
 from .primitives import TIER1_HANDLERS
 
-# Single dispatch table across all tiers. Tier-N handlers register here.
+# Single dispatch table across all tiers.
 HANDLERS = {**TIER1_HANDLERS, **TIER2_HANDLERS}
 
 # Document-level infrastructure types — appear in valid documents but carry
-# no translatable content. Silently skipped at the top level. (Children of a
-# Body's Origin are also skipped via the body-ownership filter below.)
+# no translatable content. Silently skipped at the top level.
 INFRASTRUCTURE_TYPES = {
     "App::Origin", "App::Line", "App::Plane", "App::Part",
     "App::DocumentObjectGroup",
@@ -23,12 +29,7 @@ INFRASTRUCTURE_TYPES = {
 
 
 def _names_owned_by_bodies(doc) -> set[str]:
-    """Names of objects that should be processed via their Body, not directly.
-
-    A PartDesign::Body's Group lists its features (sketches, pads, etc.) and
-    its Origin holds datum planes/lines. All appear in doc.Objects too — but
-    we want the Body handler to compose them, not the top-level loop.
-    """
+    """Names of objects that should be processed via their Body."""
     owned: set[str] = set()
     for o in doc.Objects:
         if o.TypeId != "PartDesign::Body":
@@ -42,17 +43,14 @@ def _names_owned_by_bodies(doc) -> set[str]:
     return owned
 
 
-def translate(fcstd_path: Path | str) -> str:
-    """Translate an .FCStd file to build123d Python source.
-
-    Every top-level object must either:
-      - have a registered handler,
-      - be infrastructure (silently skipped),
-      - or be owned by a Body container (handled by the Body's translator).
-
-    Otherwise UnsupportedFeatureError is raised — no silent passes.
-    """
+def translate_with_context(
+    fcstd_path: Path | str,
+) -> tuple[str, TranslationContext]:
+    """Translate an .FCStd file. Return (build123d_source, context)."""
     path = Path(fcstd_path)
+    ctx = TranslationContext(
+        source_path=path, freecad_version=freecad_version()
+    )
     units: list[TranslationUnit] = []
     with open_document(path) as doc:
         owned = _names_owned_by_bodies(doc)
@@ -62,6 +60,13 @@ def translate(fcstd_path: Path | str) -> str:
             handler = HANDLERS.get(obj.TypeId)
             if handler is None:
                 raise UnsupportedFeatureError(obj.TypeId, obj.Label)
-            units.extend(handler(obj))
+            units.extend(handler(obj, ctx))
 
-    return render_module(units, path)
+    source = render_module(units, path)
+    return source, ctx
+
+
+def translate(fcstd_path: Path | str) -> str:
+    """Translate an .FCStd file to build123d Python source (compat shim)."""
+    source, _ctx = translate_with_context(fcstd_path)
+    return source

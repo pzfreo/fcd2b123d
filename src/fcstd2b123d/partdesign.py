@@ -1,22 +1,35 @@
 """PartDesign feature translators.
 
 Tier-2 scope:
-  - PartDesign::Body container — walks Group, chains features.
+  - PartDesign::Body — walks Group, chains features into a running shape.
   - PartDesign::Pad — extrude (with Reversed option).
-  - PartDesign::Pocket — subtractive extrude (with Reversed and ThroughAll
-    options).
-  - PartDesign::Revolution — revolve around X/Y/Z (with Reversed option).
-    Handled both inside a Body and as a top-level atomic feature (some
-    legacy library files have a free-standing Revolution at document level).
+  - PartDesign::Pocket — subtractive extrude (Reversed, ThroughAll).
+  - PartDesign::Revolution — revolve around X/Y/Z or sketch-local axes
+    (with Reversed). Handled both inside a Body and as a top-level atomic
+    feature (some legacy library files have a free-standing Revolution at
+    document level).
 
-Not in scope: TwoLengths / Midplane Pad/Pocket modes, UpToFace, Up to
-arbitrary axis revolutions, Hole, Groove, sweep / loft / helix features.
+Tier-3 scope:
+  - PartDesign::Fillet — round the named edges of a parent feature.
+  - PartDesign::Chamfer — bevel the named edges of a parent feature.
+
+Edge selection for fillet/chamfer: FreeCAD references edges by index
+('Edge8'), which only makes sense in FreeCAD's BRep evaluation. To select
+the same edges in build123d we read each referenced edge's geometric
+midpoint from FreeCAD's evaluated shape, then emit a build123d expression
+that picks edges whose midpoints match. This is the central mechanic
+validating ADR-0001's "use FreeCAD-runtime" decision.
+
+Not in scope: TwoLengths / Midplane Pad/Pocket modes, UpToFace, revolutions
+around arbitrary axes, Hole, Groove, sweep / loft / helix features.
 """
 
 from __future__ import annotations
 
+from .context import TranslationContext
 from .emitter import TranslationUnit
 from .errors import UnsupportedFeatureError
+from .freecad_properties import extract_properties
 from .sketch import translate_sketch
 
 _TOL = 1e-9
@@ -41,10 +54,10 @@ def _body_placement_is_identity(body) -> bool:
     )
 
 
-def translate_body(body) -> list[TranslationUnit]:
+def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
     """Walk a PartDesign::Body and emit units in feature order.
 
-    Subtractive features (Pocket) consume the running body shape; we track
+    Subtractive / dressup features consume the running body shape; we track
     the last "result" variable name as we go.
     """
     if not _body_placement_is_identity(body):
@@ -60,30 +73,45 @@ def translate_body(body) -> list[TranslationUnit]:
         if tid in _BODY_INFRASTRUCTURE:
             continue
         if tid == "Sketcher::SketchObject":
-            units.extend(translate_sketch(child))
+            units.extend(translate_sketch(child, ctx))
         elif tid == "PartDesign::Pad":
-            unit = _translate_pad(child)
+            unit = _translate_pad(child, ctx)
             units.append(unit)
             current_var = unit.var_name
         elif tid == "PartDesign::Pocket":
             if current_var is None:
                 raise UnsupportedFeatureError(
                     tid,
-                    f"{child.Label} (Pocket with no preceding solid in body — "
-                    f"unsupported)",
+                    f"{child.Label} (Pocket with no preceding solid in body)",
                 )
-            unit = _translate_pocket(child, current_var)
+            unit = _translate_pocket(child, current_var, ctx)
             units.append(unit)
             current_var = unit.var_name
         elif tid == "PartDesign::Revolution":
-            unit = _translate_revolution(child, base=current_var)
+            unit = _translate_revolution(child, current_var, ctx)
             units.append(unit)
             current_var = unit.var_name
+        elif tid == "PartDesign::Fillet":
+            if current_var is None:
+                raise UnsupportedFeatureError(
+                    tid,
+                    f"{child.Label} (Fillet with no preceding solid in body)",
+                )
+            units.extend(_translate_fillet(child, current_var, ctx))
+            current_var = child.Name
+        elif tid == "PartDesign::Chamfer":
+            if current_var is None:
+                raise UnsupportedFeatureError(
+                    tid,
+                    f"{child.Label} (Chamfer with no preceding solid in body)",
+                )
+            units.extend(_translate_chamfer(child, current_var, ctx))
+            current_var = child.Name
         else:
             raise UnsupportedFeatureError(
                 tid,
-                f"{child.Label} (feature kind not supported in tier-2; "
-                f"only Pad, Pocket, Revolution and their sketches)",
+                f"{child.Label} (feature kind not supported in tier 2/3; "
+                f"only Sketch / Pad / Pocket / Revolution / Fillet / Chamfer)",
             )
     return units
 
@@ -93,7 +121,7 @@ def translate_body(body) -> list[TranslationUnit]:
 # ---------------------------------------------------------------------------
 
 
-def _translate_pad(pad) -> TranslationUnit:
+def _translate_pad(pad, ctx: TranslationContext) -> TranslationUnit:
     if str(getattr(pad, "Type", "Length")) != "Length":
         raise UnsupportedFeatureError(
             pad.TypeId,
@@ -113,13 +141,22 @@ def _translate_pad(pad) -> TranslationUnit:
     reversed_ = bool(getattr(pad, "Reversed", False))
     amount = -length if reversed_ else length
 
-    return TranslationUnit(
+    unit = TranslationUnit(
         var_name=pad.Name,
         imports={"extrude"},
         lines=[f"{pad.Name} = extrude({sketch_var}, amount={amount})"],
         comment=f"PartDesign::Pad {pad.Label!r}: length={length}"
                 + (" (reversed)" if reversed_ else ""),
     )
+    ctx.add_step(
+        feature_type="pad",
+        feature_name=pad.Name,
+        depends_on=[sketch_var],
+        renamed_from_default=(pad.Label != pad.Name),
+        build123d_code=unit.lines[0],
+        properties=extract_properties(getattr(pad, "Shape", None)),
+    )
+    return unit
 
 
 # ---------------------------------------------------------------------------
@@ -127,20 +164,12 @@ def _translate_pad(pad) -> TranslationUnit:
 # ---------------------------------------------------------------------------
 
 
-# A "very large" length for ThroughAll — big enough to span any realistic part
-# without being so big it kills OCCT precision. 1e6 mm = 1 km — handles
-# everything the Parts Library actually contains.
 _THROUGH_ALL_LENGTH = 1_000_000.0
 
 
-def _translate_pocket(pocket, base_var: str) -> TranslationUnit:
-    """A pocket subtracts an extruded profile from the running body.
-
-    Type=Length:     extrude by Length in the sketch's -normal direction
-                     (or +normal if Reversed).
-    Type=ThroughAll: extrude both ways far enough to cut the entire body,
-                     then subtract.
-    """
+def _translate_pocket(
+    pocket, base_var: str, ctx: TranslationContext
+) -> TranslationUnit:
     pocket_type = str(getattr(pocket, "Type", "Length"))
     if pocket_type not in {"Length", "ThroughAll"}:
         raise UnsupportedFeatureError(
@@ -160,10 +189,6 @@ def _translate_pocket(pocket, base_var: str) -> TranslationUnit:
     reversed_ = bool(getattr(pocket, "Reversed", False))
 
     if pocket_type == "ThroughAll":
-        # Cut "through" the body in one direction. FreeCAD's ThroughAll
-        # extrudes the profile only along the chosen normal direction
-        # (flipped by Reversed); both-directions cutting would over-remove
-        # material on bodies that extend on both sides of the sketch plane.
         length = _THROUGH_ALL_LENGTH
         amount = length if reversed_ else -length
         line = (
@@ -173,18 +198,25 @@ def _translate_pocket(pocket, base_var: str) -> TranslationUnit:
         note = "ThroughAll" + (" (reversed)" if reversed_ else "")
     else:
         length = float(pocket.Length.Value)
-        # Pocket extrudes INTO the body — opposite to the sketch normal.
-        # Default direction: -normal → amount=-length. Reversed flips that.
         amount = length if reversed_ else -length
         line = f"{pocket.Name} = {base_var} - extrude({sketch_var}, amount={amount})"
         note = f"length={length}" + (" (reversed)" if reversed_ else "")
 
-    return TranslationUnit(
+    unit = TranslationUnit(
         var_name=pocket.Name,
         imports={"extrude"},
         lines=[line],
         comment=f"PartDesign::Pocket {pocket.Label!r}: {note}",
     )
+    ctx.add_step(
+        feature_type="pocket",
+        feature_name=pocket.Name,
+        depends_on=[base_var, sketch_var],
+        renamed_from_default=(pocket.Label != pocket.Name),
+        build123d_code=unit.lines[0],
+        properties=extract_properties(getattr(pocket, "Shape", None)),
+    )
+    return unit
 
 
 # ---------------------------------------------------------------------------
@@ -193,34 +225,19 @@ def _translate_pocket(pocket, base_var: str) -> TranslationUnit:
 
 
 def _axis_expr_from_reference(rev) -> tuple[str, set[str]]:
-    """Map a PartDesign::Revolution.ReferenceAxis to a build123d Axis expression.
-
-    Three supported reference shapes:
-    1. A Body's Origin line (X_Axis / Y_Axis / Z_Axis) — use Axis.X/.Y/.Z.
-    2. A Sketch (subelement = '' or 'H_Axis'): the sketch's local X axis,
-       transformed through the sketch.Placement to world coordinates. When
-       that turns out to be one of the world X/Y/Z directions we emit the
-       Axis.{X,Y,Z} shortcut; otherwise an explicit Axis((origin), (dir)).
-    3. A Sketch with subelement 'V_Axis': the sketch's local Y axis.
-
-    Anything else raises UnsupportedFeatureError.
-    """
     ref = rev.ReferenceAxis
     if not ref:
         raise UnsupportedFeatureError(
-            rev.TypeId,
-            f"{rev.Label} (Revolution has no ReferenceAxis set)",
+            rev.TypeId, f"{rev.Label} (Revolution has no ReferenceAxis set)"
         )
     obj, subs = ref
 
-    # Body origin axis case.
     name = getattr(obj, "Name", "") or ""
     label = getattr(obj, "Label", "") or ""
     for candidate in (name, label):
         if candidate in _AXIS_OF_ORIGIN:
             return _AXIS_OF_ORIGIN[candidate], {"Axis"}
 
-    # Sketch axis case.
     if getattr(obj, "TypeId", "") == "Sketcher::SketchObject":
         return _sketch_axis_expr(obj, subs, rev)
 
@@ -231,10 +248,9 @@ def _axis_expr_from_reference(rev) -> tuple[str, set[str]]:
 
 
 def _sketch_axis_expr(sketch, subs, rev) -> tuple[str, set[str]]:
-    """Resolve a sketch-internal axis to a build123d Axis expression."""
     import FreeCAD  # lazy
 
-    sub = (subs[0] if subs else "") or ""  # often empty for default
+    sub = (subs[0] if subs else "") or ""
     if sub in ("", "H_Axis"):
         local = FreeCAD.Vector(1, 0, 0)
     elif sub == "V_Axis":
@@ -242,15 +258,13 @@ def _sketch_axis_expr(sketch, subs, rev) -> tuple[str, set[str]]:
     else:
         raise UnsupportedFeatureError(
             rev.TypeId,
-            f"{rev.Label} (Sketch axis subelement {sub!r} not supported; "
-            f"only '' / 'H_Axis' / 'V_Axis')",
+            f"{rev.Label} (Sketch axis subelement {sub!r} not supported)",
         )
 
     rot = sketch.Placement.Rotation
     direction = rot.multVec(local)
     origin = sketch.Placement.Base
 
-    # Snap to an axis constant when direction aligns with a world axis.
     for axis_name, vec in (
         ("Axis.X", FreeCAD.Vector(1, 0, 0)),
         ("Axis.Y", FreeCAD.Vector(0, 1, 0)),
@@ -267,24 +281,18 @@ def _sketch_axis_expr(sketch, subs, rev) -> tuple[str, set[str]]:
             return axis_name, {"Axis"}
 
     return (
-        f"Axis(("
-        f"{origin.x}, {origin.y}, {origin.z}), "
+        f"Axis(({origin.x}, {origin.y}, {origin.z}), "
         f"({direction.x}, {direction.y}, {direction.z}))"
     ), {"Axis"}
 
 
-def _translate_revolution(rev, base: str | None) -> TranslationUnit:
-    """Translate a PartDesign::Revolution feature.
-
-    Atomic Revolution (base=None): result = revolve(profile, axis, angle).
-    Body-internal Revolution after a Pad/Pocket: revolve added to running shape.
-    In the v1 Parts Library set, body-internal Revolutions always start the
-    body (base remains None at that point), so the additive-only branch is
-    sufficient for now.
-    """
+def _translate_revolution(
+    rev, base: str | None, ctx: TranslationContext
+) -> TranslationUnit:
     if str(getattr(rev, "Type", "Angle")) != "Angle":
         raise UnsupportedFeatureError(
-            rev.TypeId, f"{rev.Label} (Revolution.Type={rev.Type!r}; only 'Angle' supported)"
+            rev.TypeId,
+            f"{rev.Label} (Revolution.Type={rev.Type!r}; only 'Angle' supported)",
         )
     if bool(getattr(rev, "Midplane", False)):
         raise UnsupportedFeatureError(
@@ -295,7 +303,8 @@ def _translate_revolution(rev, base: str | None) -> TranslationUnit:
     if isinstance(profile, (list, tuple)):
         profile = profile[0]
     sketch_var = profile.Name
-    angle = float(rev.Angle.Value) if hasattr(rev.Angle, "Value") else float(rev.Angle)
+    angle_raw = rev.Angle
+    angle = float(angle_raw.Value) if hasattr(angle_raw, "Value") else float(angle_raw)
     reversed_ = bool(getattr(rev, "Reversed", False))
     axis_expr, axis_imports = _axis_expr_from_reference(rev)
     if reversed_:
@@ -308,25 +317,153 @@ def _translate_revolution(rev, base: str | None) -> TranslationUnit:
             f"{rev.Name} = revolve({sketch_var}, axis={axis_expr}, "
             f"revolution_arc={angle})"
         )
+        depends = [sketch_var]
     else:
         line = (
             f"{rev.Name} = {base} + revolve({sketch_var}, axis={axis_expr}, "
             f"revolution_arc={angle})"
         )
+        depends = [base, sketch_var]
 
-    return TranslationUnit(
+    unit = TranslationUnit(
         var_name=rev.Name,
         imports=imports,
         lines=[line],
         comment=f"PartDesign::Revolution {rev.Label!r}: angle={angle}"
                 + (" (reversed)" if reversed_ else ""),
     )
+    ctx.add_step(
+        feature_type="revolution",
+        feature_name=rev.Name,
+        depends_on=depends,
+        renamed_from_default=(rev.Label != rev.Name),
+        build123d_code=unit.lines[0],
+        properties=extract_properties(getattr(rev, "Shape", None)),
+    )
+    return unit
 
 
-def _translate_atomic_revolution(rev) -> list[TranslationUnit]:
+def _translate_atomic_revolution(
+    rev, ctx: TranslationContext
+) -> list[TranslationUnit]:
     """Top-level (non-Body) Revolution. Its sketch is translated separately
     via the Sketcher::SketchObject top-level handler in document order."""
-    return [_translate_revolution(rev, base=None)]
+    return [_translate_revolution(rev, base=None, ctx=ctx)]
+
+
+# ---------------------------------------------------------------------------
+# Fillet / Chamfer — tier 3
+# ---------------------------------------------------------------------------
+
+
+def _resolve_edge_midpoints(parent_shape, edge_names) -> list[tuple[float, float, float]]:
+    """For each 'Edge<N>' name, return the edge's midpoint in world coords.
+
+    This is where FreeCAD does the work that pure-text parsing of an FCStd
+    cannot: it recomputes the BRep and lets us index into it by FreeCAD's own
+    internal naming. We then carry the geometric midpoint forward into the
+    emitted build123d code, where build123d selects edges by that location.
+    """
+    midpoints = []
+    edges = parent_shape.Edges
+    for ename in edge_names:
+        if not ename.startswith("Edge"):
+            raise UnsupportedFeatureError(
+                "PartDesign::Fillet",
+                f"edge reference {ename!r} not understood (expected 'Edge<N>')",
+            )
+        idx = int(ename[len("Edge"):]) - 1
+        if idx < 0 or idx >= len(edges):
+            raise UnsupportedFeatureError(
+                "PartDesign::Fillet",
+                f"edge index {idx + 1} out of range (shape has {len(edges)} edges)",
+            )
+        edge = edges[idx]
+        # Edge.valueAt(param) returns the point at parameter t. The midpoint
+        # is at (FirstParameter + LastParameter) / 2.
+        t = (edge.FirstParameter + edge.LastParameter) / 2.0
+        p = edge.valueAt(t)
+        midpoints.append((p.x, p.y, p.z))
+    return midpoints
+
+
+def _format_midpoints(midpoints: list[tuple[float, float, float]]) -> str:
+    return "[" + ", ".join(f"({x}, {y}, {z})" for x, y, z in midpoints) + "]"
+
+
+def _dressup_unit(
+    obj,
+    base_var: str,
+    builder: str,
+    radius_attr: str,
+    ctx: TranslationContext,
+    feature_type: str,
+) -> list[TranslationUnit]:
+    """Common emit shape for Fillet and Chamfer.
+
+    Both reference edges of a parent feature by name and apply a single
+    scalar (radius for Fillet, Size for Chamfer) to all selected edges.
+    """
+    base = obj.Base  # (parent_object, [edge_names])
+    if isinstance(base, (list, tuple)):
+        parent, edge_names = base
+    else:
+        raise UnsupportedFeatureError(
+            obj.TypeId, f"{obj.Label} (Base property has unexpected shape)"
+        )
+
+    parent_shape = parent.Shape
+    midpoints = _resolve_edge_midpoints(parent_shape, edge_names)
+    if not midpoints:
+        raise UnsupportedFeatureError(
+            obj.TypeId,
+            f"{obj.Label} (no edges referenced)",
+        )
+
+    radius = float(getattr(obj, radius_attr).Value)
+    midpoints_repr = _format_midpoints(midpoints)
+    var = obj.Name
+
+    edge_select_line = (
+        f"_{var}_edges = ["
+        f"e for e in {base_var}.edges() "
+        f"if any((e.position_at(0.5) - Vector(*m)).length < 1e-3 "
+        f"for m in {midpoints_repr})]"
+    )
+    if builder == "fillet":
+        result_line = f"{var} = {builder}(_{var}_edges, radius={radius})"
+    else:
+        result_line = f"{var} = {builder}(_{var}_edges, length={radius})"
+
+    unit = TranslationUnit(
+        var_name=var,
+        imports={builder, "Vector"},
+        lines=[edge_select_line, result_line],
+        comment=f"{obj.TypeId} {obj.Label!r}: "
+                f"{radius_attr.lower()}={radius} on {len(edge_names)} edges of {parent.Name}",
+    )
+    ctx.add_step(
+        feature_type=feature_type,
+        feature_name=obj.Name,
+        depends_on=[base_var],
+        renamed_from_default=(obj.Label != obj.Name),
+        build123d_code="\n".join(unit.lines),
+        properties=extract_properties(getattr(obj, "Shape", None)),
+    )
+    return [unit]
+
+
+def _translate_fillet(
+    fil, base_var: str, ctx: TranslationContext
+) -> list[TranslationUnit]:
+    return _dressup_unit(fil, base_var, "fillet", "Radius", ctx, "fillet")
+
+
+def _translate_chamfer(
+    cha, base_var: str, ctx: TranslationContext
+) -> list[TranslationUnit]:
+    # PartDesign::Chamfer's main attribute is named "Size" (the bevel length).
+    return _dressup_unit(cha, base_var, "chamfer", "Size", ctx, "chamfer")
 
 
 TIER2_HANDLERS = {
