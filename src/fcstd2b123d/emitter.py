@@ -82,6 +82,34 @@ HELPER_DEFINITIONS = {
         e for e in shape.edges()
         if any((e.position_at(0.5) - t).length < tol for t in targets)
     ]""",
+    "_pattern_union": """def _pattern_union(base, *additions):
+    \"\"\"Boolean-union ``base`` with each addition via BuildPart.
+
+    Chained ``+`` on build123d Part objects returns a Compound that does not
+    fuse overlapping geometry — so for pattern features whose copies overlap
+    (e.g. sprocket teeth meeting at the hub) the resulting volume is wrong.
+    Routing through BuildPart.add() invokes OCCT's robust boolean fusion.
+    \"\"\"
+    from build123d import BuildPart, add
+    with BuildPart() as _bp:
+        add(base)
+        for s in additions:
+            add(s)
+    return _bp.part""",
+    "_pattern_difference": """def _pattern_difference(base, *removals):
+    \"\"\"Boolean-subtract each removal from ``base`` via BuildPart.
+
+    Mirror of ``_pattern_union`` for subtractive (Pocket Original) patterns.
+    Chained ``-`` does *not* exhibit the same Compound-collapsing bug as
+    ``+`` in current build123d, but using BuildPart for both keeps the emit
+    symmetric and future-proofs against the inverse issue.
+    \"\"\"
+    from build123d import BuildPart, Mode, add
+    with BuildPart() as _bp:
+        add(base)
+        for s in removals:
+            add(s, mode=Mode.SUBTRACT)
+    return _bp.part""",
 }
 
 
