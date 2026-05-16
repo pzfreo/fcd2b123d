@@ -42,6 +42,7 @@ def _translate_cut(obj, ctx: TranslationContext) -> list[TranslationUnit]:
     line = f"{obj.Name} = _pattern_difference({base_var}, {tool_var})"
     unit = TranslationUnit(
         var_name=obj.Name,
+        label=obj.Label,
         lines=[line],
         comment=f"Part::Cut {obj.Label!r}: {base_var} - {tool_var}",
         helpers={"_pattern_difference"},
@@ -68,6 +69,7 @@ def _translate_fuse(obj, ctx: TranslationContext) -> list[TranslationUnit]:
     line = f"{obj.Name} = _pattern_union({base_var}, {tool_var})"
     unit = TranslationUnit(
         var_name=obj.Name,
+        label=obj.Label,
         lines=[line],
         comment=f"Part::Fuse {obj.Label!r}: {base_var} + {tool_var}",
         helpers={"_pattern_union"},
@@ -94,6 +96,7 @@ def _translate_common(obj, ctx: TranslationContext) -> list[TranslationUnit]:
     line = f"{obj.Name} = _pattern_intersection({base_var}, {tool_var})"
     unit = TranslationUnit(
         var_name=obj.Name,
+        label=obj.Label,
         lines=[line],
         comment=f"Part::Common {obj.Label!r}: {base_var} & {tool_var}",
         helpers={"_pattern_intersection"},
@@ -120,6 +123,7 @@ def _translate_multi_fuse(obj, ctx: TranslationContext) -> list[TranslationUnit]
     line = f"{obj.Name} = _pattern_union({args})"
     unit = TranslationUnit(
         var_name=obj.Name,
+        label=obj.Label,
         lines=[line],
         comment=f"Part::MultiFuse {obj.Label!r}: {' + '.join(names)}",
         helpers={"_pattern_union"},
@@ -146,6 +150,7 @@ def _translate_multi_common(obj, ctx: TranslationContext) -> list[TranslationUni
     line = f"{obj.Name} = _pattern_intersection({args})"
     unit = TranslationUnit(
         var_name=obj.Name,
+        label=obj.Label,
         lines=[line],
         comment=f"Part::MultiCommon {obj.Label!r}: {' & '.join(names)}",
         helpers={"_pattern_intersection"},

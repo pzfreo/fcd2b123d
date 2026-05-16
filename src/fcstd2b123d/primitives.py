@@ -207,6 +207,7 @@ def translate_box(obj, ctx: TranslationContext) -> list[TranslationUnit]:
     var = _safe_var(obj.Name)
     unit = TranslationUnit(
         var_name=var,
+        label=obj.Label,
         imports=imports,
         lines=[f"{var} = {full}"],
         comment=f"Part::Box {obj.Label!r}: Length={L}, Width={W}, Height={H}",
@@ -230,6 +231,7 @@ def translate_cylinder(obj, ctx: TranslationContext) -> list[TranslationUnit]:
     var = _safe_var(obj.Name)
     unit = TranslationUnit(
         var_name=var,
+        label=obj.Label,
         imports={"Cylinder"} | extra_imports,
         lines=[f"{var} = {full}"],
         comment=f"Part::Cylinder {obj.Label!r}: Radius={R}, Height={H}",
@@ -255,6 +257,7 @@ def translate_sphere(obj, ctx: TranslationContext) -> list[TranslationUnit]:
     var = _safe_var(obj.Name)
     unit = TranslationUnit(
         var_name=var,
+        label=obj.Label,
         imports={"Sphere"} | extra_imports,
         lines=[f"{var} = {full}"],
         comment=f"Part::Sphere {obj.Label!r}: Radius={R}",
@@ -279,6 +282,7 @@ def translate_cone(obj, ctx: TranslationContext) -> list[TranslationUnit]:
     var = _safe_var(obj.Name)
     unit = TranslationUnit(
         var_name=var,
+        label=obj.Label,
         imports={"Cone"} | extra_imports,
         lines=[f"{var} = {full}"],
         comment=f"Part::Cone {obj.Label!r}: Radius1={R1}, Radius2={R2}, Height={H}",
@@ -302,6 +306,7 @@ def translate_torus(obj, ctx: TranslationContext) -> list[TranslationUnit]:
     var = _safe_var(obj.Name)
     unit = TranslationUnit(
         var_name=var,
+        label=obj.Label,
         imports={"Torus"} | extra_imports,
         lines=[f"{var} = {full}"],
         comment=f"Part::Torus {obj.Label!r}: Radius1={Rmaj}, Radius2={Rmin}",
