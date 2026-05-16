@@ -135,6 +135,50 @@ def make_simple_pad(out: Path) -> None:
     _save(doc, out / "tier2_partdesign/simple_pad.FCStd")
 
 
+def make_sweep_simple(out: Path) -> None:
+    """Single circle profile swept along a straight-line spine — #34 Sweep."""
+    doc = FreeCAD.newDocument("sweep")
+    profile = doc.addObject("Sketcher::SketchObject", "Profile")
+    profile.addGeometry(
+        Part.Circle(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 0, 1), 2), False
+    )
+    doc.recompute()
+    spine = doc.addObject("Sketcher::SketchObject", "Spine")
+    spine.Placement = FreeCAD.Placement(
+        FreeCAD.Vector(0, 0, 0),
+        FreeCAD.Rotation(FreeCAD.Vector(0.5, 0.5, 0.5), 120),
+    )
+    spine.addGeometry(
+        Part.LineSegment(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 30, 0)), False
+    )
+    sweep = doc.addObject("Part::Sweep", "Sweep")
+    sweep.Sections = [profile]
+    sweep.Spine = spine
+    sweep.Solid = True
+    sweep.Frenet = False
+    _save(doc, out / "tier2_partdesign/sweep_simple.FCStd")
+
+
+def make_loft_simple(out: Path) -> None:
+    """Two circles at different z lofted — #34 Loft."""
+    doc = FreeCAD.newDocument("loft")
+    sec1 = doc.addObject("Sketcher::SketchObject", "Section1")
+    sec1.addGeometry(
+        Part.Circle(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 0, 1), 3), False
+    )
+    sec2 = doc.addObject("Sketcher::SketchObject", "Section2")
+    sec2.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 15), FreeCAD.Rotation())
+    sec2.addGeometry(
+        Part.Circle(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 0, 1), 1), False
+    )
+    loft = doc.addObject("Part::Loft", "Loft")
+    loft.Sections = [sec1, sec2]
+    loft.Solid = True
+    loft.Ruled = True
+    loft.Closed = False
+    _save(doc, out / "tier2_partdesign/loft_simple.FCStd")
+
+
 def make_pad_with_ellipse(out: Path) -> None:
     """Sketch containing a single rotated Ellipse, padded — #30 ellipse support."""
     doc = FreeCAD.newDocument("padellip")

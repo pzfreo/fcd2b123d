@@ -60,6 +60,26 @@ def _names_owned_by_bodies(doc) -> set[str]:
     return owned
 
 
+def _names_used_as_sweep_spines(doc) -> set[str]:
+    """Names of objects referenced as ``Spine`` by a ``Part::Sweep``.
+
+    Spine sketches are typically open (a single line / arc / spline)
+    rather than closed loops — they describe a path, not a face. The
+    sketch translator only handles closed loops, so we skip these and
+    let the Sweep translator inline the spine geometry directly.
+    """
+    spines: set[str] = set()
+    for o in doc.Objects:
+        if o.TypeId != "Part::Sweep":
+            continue
+        spine = getattr(o, "Spine", None)
+        if isinstance(spine, (list, tuple)):
+            spine = spine[0] if spine else None
+        if spine is not None:
+            spines.add(spine.Name)
+    return spines
+
+
 def translate_with_context(
     fcstd_path: Path | str,
 ) -> tuple[str, TranslationContext]:
@@ -75,8 +95,13 @@ def translate_with_context(
         ctx.parameters = extract_parameters(doc)
 
         owned = _names_owned_by_bodies(doc)
+        spines = _names_used_as_sweep_spines(doc)
         for obj in doc.Objects:
-            if obj.Name in owned or obj.TypeId in INFRASTRUCTURE_TYPES:
+            if (
+                obj.Name in owned
+                or obj.Name in spines
+                or obj.TypeId in INFRASTRUCTURE_TYPES
+            ):
                 continue
             handler = HANDLERS.get(obj.TypeId)
             if handler is None:

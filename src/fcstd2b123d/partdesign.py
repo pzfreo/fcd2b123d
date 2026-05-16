@@ -1866,6 +1866,137 @@ def _translate_part_revolution(rev, ctx: TranslationContext) -> list[Translation
     return [unit]
 
 
+def _spine_path_expression(spine) -> tuple[str, set[str]]:
+    """Render a Sweep spine (a sketch/wire) as a build123d path expression.
+
+    Walks the spine's evaluated Shape edges in world frame. v1 supports
+    single-edge LineSegment spines. Multi-edge or curved spines (arcs /
+    splines) raise UnsupportedFeatureError pending v2 work.
+    """
+    shape = getattr(spine, "Shape", None)
+    if shape is None or shape.isNull():
+        raise UnsupportedFeatureError(
+            "Part::Sweep",
+            f"spine {spine.Name!r} has no Shape — cannot resolve path",
+        )
+    edges = list(shape.Edges)
+    if len(edges) != 1:
+        raise UnsupportedFeatureError(
+            "Part::Sweep",
+            f"spine {spine.Name!r} has {len(edges)} edges; v1 supports a "
+            "single-edge LineSegment spine",
+        )
+    edge = edges[0]
+    curve = edge.Curve
+    kind = type(curve).__name__
+    if kind != "Line":
+        raise UnsupportedFeatureError(
+            "Part::Sweep",
+            f"spine {spine.Name!r} edge is {kind!r}; v1 supports straight "
+            "Line spines only",
+        )
+    p0 = edge.Vertexes[0].Point
+    p1 = edge.Vertexes[1].Point
+    expr = (
+        f"Line(({format_value(p0.x)}, {format_value(p0.y)}, {format_value(p0.z)}), "
+        f"({format_value(p1.x)}, {format_value(p1.y)}, {format_value(p1.z)}))"
+    )
+    return expr, {"Line"}
+
+
+def _translate_part_sweep(sw, ctx: TranslationContext) -> list[TranslationUnit]:
+    """Part::Sweep → build123d ``sweep(profile, path=spine)``.
+
+    v1 supports single-section, single-edge LineSegment spine, Solid=True.
+    Multi-section sweeps belong in Loft territory.
+    """
+    if not bool(getattr(sw, "Solid", True)):
+        raise UnsupportedFeatureError(
+            sw.TypeId, f"{sw.Label} (Solid=False — open-shell sweep not supported)",
+        )
+    sections = list(sw.Sections)
+    if len(sections) != 1:
+        raise UnsupportedFeatureError(
+            sw.TypeId,
+            f"{sw.Label} ({len(sections)} Sections; v1 supports single section)",
+        )
+    profile_obj = sections[0]
+    spine = sw.Spine
+    if isinstance(spine, (list, tuple)):
+        spine = spine[0]
+    if spine is None:
+        raise UnsupportedFeatureError(
+            sw.TypeId, f"{sw.Label} (Spine is None)",
+        )
+
+    path_expr, path_imports = _spine_path_expression(spine)
+
+    var = sw.Name
+    line = f"{var} = sweep({profile_obj.Name}, path={path_expr})"
+    imports = {"sweep"} | path_imports
+    unit = TranslationUnit(
+        var_name=var,
+        imports=imports,
+        lines=[line],
+        comment=f"Part::Sweep {sw.Label!r}: profile={profile_obj.Name}, "
+                f"spine={spine.Name}",
+    )
+    ctx.add_step(
+        feature_type="sweep",
+        feature_name=sw.Name,
+        depends_on=[profile_obj.Name, spine.Name],
+        renamed_from_default=(sw.Label != sw.Name),
+        build123d_code=line,
+        properties=extract_properties(getattr(sw, "Shape", None)),
+    )
+    return [unit]
+
+
+def _translate_part_loft(lt, ctx: TranslationContext) -> list[TranslationUnit]:
+    """Part::Loft → build123d ``loft([profile1, profile2, ...], ruled=...)``.
+
+    v1 supports ``Solid=True`` lofts with two or more sections. ``Ruled``
+    is honoured (straight-line transition between sections). ``Closed``
+    (loop back to first section) is not yet supported.
+    """
+    if not bool(getattr(lt, "Solid", True)):
+        raise UnsupportedFeatureError(
+            lt.TypeId, f"{lt.Label} (Solid=False — open-shell loft not supported)",
+        )
+    if bool(getattr(lt, "Closed", False)):
+        raise UnsupportedFeatureError(
+            lt.TypeId, f"{lt.Label} (Closed=True — looped loft not yet supported)",
+        )
+    sections = list(lt.Sections)
+    if len(sections) < 2:
+        raise UnsupportedFeatureError(
+            lt.TypeId, f"{lt.Label} (fewer than 2 sections — invalid loft)",
+        )
+    ruled = bool(getattr(lt, "Ruled", False))
+
+    section_vars = [s.Name for s in sections]
+    var = lt.Name
+    args = ", ".join(section_vars)
+    ruled_arg = ", ruled=True" if ruled else ""
+    line = f"{var} = loft([{args}]{ruled_arg})"
+    unit = TranslationUnit(
+        var_name=var,
+        imports={"loft"},
+        lines=[line],
+        comment=f"Part::Loft {lt.Label!r}: {len(sections)} sections"
+                + (" (ruled)" if ruled else ""),
+    )
+    ctx.add_step(
+        feature_type="loft",
+        feature_name=lt.Name,
+        depends_on=section_vars,
+        renamed_from_default=(lt.Label != lt.Name),
+        build123d_code=line,
+        properties=extract_properties(getattr(lt, "Shape", None)),
+    )
+    return [unit]
+
+
 def _translate_part_compound(comp, ctx: TranslationContext) -> list[TranslationUnit]:
     """Part::Compound → ``Compound([s1, s2, ...])`` over its Links.
 
@@ -1955,6 +2086,8 @@ TIER2_HANDLERS = {
     # Part workbench equivalents.
     "Part::Extrusion": _translate_part_extrusion,
     "Part::Revolution": _translate_part_revolution,
+    "Part::Sweep": _translate_part_sweep,
+    "Part::Loft": _translate_part_loft,
     "Part::Compound": _translate_part_compound,
     "Part::Mirroring": _translate_part_mirroring,
     # Standalone sketch at the document level.
