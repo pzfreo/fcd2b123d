@@ -87,6 +87,24 @@ HELPER_DEFINITIONS = {
         e for e in shape.edges()
         if any((e.position_at(0.5) - t).length < tol for t in targets)
     ]""",
+    "_faces_at": """def _faces_at(
+    shape: Any,
+    points: list[tuple[float, float, float]],
+    tol: float = 1e-3,
+) -> list[Face]:
+    \"\"\"Select faces whose centres match any of the target points.
+
+    Companion to ``_edges_at`` for face-based features like Draft. The
+    translator captures FreeCAD's referenced face centres in world frame
+    and emits this lookup; build123d returns the matching faces of its
+    own BRep so the operation re-targets correctly.
+    \"\"\"
+    from build123d import Vector
+    targets = [Vector(*p) for p in points]
+    return [
+        f for f in shape.faces()
+        if any((f.center() - t).length < tol for t in targets)
+    ]""",
     "_pattern_union": """def _pattern_union(base, *additions):
     \"\"\"Boolean-union ``base`` with each addition via BuildPart.
 
@@ -176,10 +194,14 @@ def render_module(
     # Helpers that need extra build123d names for their type annotations.
     if "_edges_at" in helpers:
         imports.add("Edge")
+    if "_faces_at" in helpers:
+        imports.add("Face")
     import_line = f"from build123d import {', '.join(sorted(imports))}"
     # Extra stdlib imports for helper type annotations.
     typing_import_line = (
-        "from typing import Any" if "_edges_at" in helpers else ""
+        "from typing import Any"
+        if ("_edges_at" in helpers or "_faces_at" in helpers)
+        else ""
     )
 
     body_lines: list[str] = []
@@ -255,7 +277,7 @@ def _format(source: str) -> str:
 # so subsequent calls to the function still resolve correctly.
 _B123D_FUNCTION_IMPORTS = frozenset({
     "extrude", "revolve", "fillet", "chamfer", "mirror", "make_face",
-    "add", "loft", "sweep",
+    "add", "loft", "sweep", "draft",
 })
 
 

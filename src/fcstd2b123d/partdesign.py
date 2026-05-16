@@ -198,6 +198,15 @@ def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
                 )
             units.extend(_translate_chamfer(child, current_var, ctx))
             current_var = child.Name
+        elif tid == "PartDesign::Draft":
+            if current_var is None:
+                raise UnsupportedFeatureError(
+                    tid,
+                    f"{child.Label} (Draft with no preceding solid in body)",
+                )
+            unit = _translate_draft(child, current_var, ctx)
+            units.append(unit)
+            current_var = unit.var_name
         elif tid in (
             "PartDesign::LinearPattern",
             "PartDesign::PolarPattern",
@@ -773,6 +782,126 @@ def _dressup_unit(
         properties=extract_properties(getattr(obj, "Shape", None)),
     )
     return [unit]
+
+
+def _face_center(face) -> tuple[float, float, float]:
+    """World-frame centre-of-mass of a face. Companion to ``_edge_midpoint``."""
+    c = face.CenterOfMass
+    return (float(c.x), float(c.y), float(c.z))
+
+
+def _resolve_face_centers(parent_shape, face_names) -> list[tuple[float, float, float]]:
+    """FreeCAD's ``[Face1, Face2, ...]`` → centres in world frame.
+
+    Mirror of ``_resolve_edge_midpoints`` for face-based features like Draft.
+    """
+    centers: list[tuple[float, float, float]] = []
+    faces = parent_shape.Faces
+    for name in face_names:
+        if not name.startswith("Face"):
+            raise UnsupportedFeatureError(
+                "PartDesign::Draft",
+                f"reference {name!r} not understood (expected 'Face<N>')",
+            )
+        idx = int(name[len("Face"):]) - 1
+        if idx < 0 or idx >= len(faces):
+            raise UnsupportedFeatureError(
+                "PartDesign::Draft",
+                f"face index {idx + 1} out of range (shape has {len(faces)} faces)",
+            )
+        centers.append(_face_center(faces[idx]))
+    return centers
+
+
+def _translate_draft(
+    draft, base_var: str, ctx: TranslationContext
+) -> TranslationUnit:
+    """PartDesign::Draft → build123d ``draft(faces, neutral_plane, angle)``.
+
+    Resolves Base.Subs (the draft faces) to centres via FreeCAD's evaluated
+    BRep; the emit uses ``_faces_at`` to re-select them on build123d's BRep.
+    NeutralPlane is taken from FreeCAD's referenced face: a build123d
+    ``Plane(origin=centre, z_dir=normal)`` matches the OCCT side perfectly.
+
+    Limitations: ``PullDirection`` (custom pull direction) is not handled.
+    ``Reversed`` flips the angle sign.
+    """
+    base = draft.Base
+    if not isinstance(base, (list, tuple)) or len(base) != 2:
+        raise UnsupportedFeatureError(
+            draft.TypeId, f"{draft.Label} (Draft.Base has unexpected shape)"
+        )
+    parent, face_names = base
+    neutral = draft.NeutralPlane
+    if not isinstance(neutral, (list, tuple)) or len(neutral) != 2:
+        raise UnsupportedFeatureError(
+            draft.TypeId,
+            f"{draft.Label} (Draft.NeutralPlane required — pull-direction "
+            "mode not yet supported)",
+        )
+    neutral_obj, neutral_subs = neutral
+    if not neutral_subs:
+        raise UnsupportedFeatureError(
+            draft.TypeId,
+            f"{draft.Label} (Draft.NeutralPlane has no face reference)",
+        )
+
+    parent_shape = parent.Shape
+    face_centers = _resolve_face_centers(parent_shape, face_names)
+    if not face_centers:
+        raise UnsupportedFeatureError(
+            draft.TypeId, f"{draft.Label} (no faces referenced)",
+        )
+
+    # Neutral plane: take first referenced face's centre + outward normal.
+    nidx = int(neutral_subs[0][len("Face"):]) - 1
+    nface = neutral_obj.Shape.Faces[nidx]
+    nc = nface.CenterOfMass
+    nn = nface.normalAt(0, 0)
+
+    angle = float(draft.Angle.Value) if hasattr(draft.Angle, "Value") else float(draft.Angle)
+    if bool(getattr(draft, "Reversed", False)):
+        angle = -angle
+    # FreeCAD's positive Draft angle slopes the face INWARD from the
+    # neutral plane (removes material); build123d's positive ``draft()``
+    # angle slopes the face *outward* in the neutral-plane normal
+    # direction. Flip the sign so the two conventions match.
+    angle = -angle
+
+    centers_repr = _format_midpoints(face_centers)
+    plane_expr = (
+        f"Plane(origin=({format_value(nc.x)}, {format_value(nc.y)}, "
+        f"{format_value(nc.z)}), z_dir=({format_value(nn.x)}, "
+        f"{format_value(nn.y)}, {format_value(nn.z)}))"
+    )
+    var = draft.Name
+    # build123d's ``draft(faces, neutral_plane, angle)`` infers the parent
+    # solid from the faces themselves — no separate base shape arg.
+    line = (
+        f"{var} = draft(faces=_faces_at({base_var}, {centers_repr}), "
+        f"neutral_plane={plane_expr}, angle={format_value(angle)})"
+    )
+
+    unit = TranslationUnit(
+        var_name=var,
+        imports={"draft", "Plane"},
+        lines=[line],
+        comment=(
+            f"PartDesign::Draft {draft.Label!r}: angle={angle}° on "
+            f"{len(face_names)} faces of {parent.Name}, "
+            f"neutral={neutral_obj.Name}/{neutral_subs[0]}"
+        ),
+        helpers={"_faces_at"},
+    )
+    ctx.add_step(
+        feature_type="draft",
+        feature_name=draft.Name,
+        depends_on=[base_var],
+        renamed_from_default=(draft.Label != draft.Name),
+        build123d_code=line,
+        properties=extract_properties(getattr(draft, "Shape", None)),
+    )
+    return unit
 
 
 def _translate_fillet(
