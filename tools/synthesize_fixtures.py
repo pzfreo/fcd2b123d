@@ -231,7 +231,6 @@ def make_pocket_with_draft(out: Path) -> None:
     pad.Length = 20
     doc.recompute()
 
-    # Locate the bottom face (neutral plane) and a +Y side face (drafted).
     pad_shape = pad.Shape
     bottom = None
     sidey = None
@@ -247,6 +246,46 @@ def make_pocket_with_draft(out: Path) -> None:
     draft.NeutralPlane = (pad, [f"Face{bottom}"])
     draft.Angle = 5
     _save(doc, out / "tier3_filletchamfer/pad_with_draft.FCStd")
+
+
+def make_pad_with_hole(out: Path) -> None:
+    """Pad + Hole (2 through-holes, Angled drill point) — #32 Hole support."""
+    doc = FreeCAD.newDocument("hole")
+    body = doc.addObject("PartDesign::Body", "Body")
+    sketch = body.newObject("Sketcher::SketchObject", "Profile")
+    sketch.AttachmentSupport = (body.Origin.OutList[3], [""])
+    sketch.MapMode = "FlatFace"
+    v = FreeCAD.Vector
+    sketch.addGeometry(Part.LineSegment(v(0, 0, 0), v(40, 0, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(40, 0, 0), v(40, 30, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(40, 30, 0), v(0, 30, 0)), False)
+    sketch.addGeometry(Part.LineSegment(v(0, 30, 0), v(0, 0, 0)), False)
+    for i in range(4):
+        sketch.addConstraint(
+            Sketcher.Constraint("Coincident", i, 2, (i + 1) % 4, 1)
+        )
+    pad = body.newObject("PartDesign::Pad", "Pad")
+    pad.Profile = sketch
+    pad.Length = 5
+    doc.recompute()
+    hole_sketch = body.newObject("Sketcher::SketchObject", "HoleProfile")
+    hole_sketch.AttachmentSupport = (body.Origin.OutList[3], [""])
+    hole_sketch.MapMode = "FlatFace"
+    hole_sketch.addGeometry(Part.Circle(v(10, 15, 0), v(0, 0, 1), 1), False)
+    hole_sketch.addGeometry(Part.Circle(v(30, 15, 0), v(0, 0, 1), 1), False)
+    doc.recompute()
+    hole = body.newObject("PartDesign::Hole", "Hole")
+    hole.Profile = hole_sketch
+    hole.BaseFeature = pad
+    hole.Diameter = 4
+    hole.Depth = 8
+    hole.DrillPoint = "Angled"
+    hole.DrillPointAngle = 118
+    hole.HoleCutType = "None"
+    hole.Threaded = False
+    hole.ModelThread = False
+    hole.Reversed = True
+    _save(doc, out / "tier2_partdesign/pad_with_hole.FCStd")
 
 
 def make_part_compound(out: Path) -> None:

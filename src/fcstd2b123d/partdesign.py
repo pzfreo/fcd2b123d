@@ -46,7 +46,7 @@ from .emitter import TranslationUnit, format_value, vfmt
 from .errors import UnsupportedFeatureError
 from .freecad_properties import extract_properties
 from .parametric import resolve_property
-from .sketch import translate_sketch
+from .sketch import _plane_expr, translate_sketch
 
 
 def _value(obj, prop_name: str, ctx: TranslationContext, value_or_obj=None):
@@ -180,6 +180,15 @@ def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
                     f"{child.Label} (Groove with no preceding solid in body)",
                 )
             unit = _translate_groove(child, current_var, ctx)
+            units.append(unit)
+            current_var = unit.var_name
+        elif tid == "PartDesign::Hole":
+            if current_var is None:
+                raise UnsupportedFeatureError(
+                    tid,
+                    f"{child.Label} (Hole with no preceding solid in body)",
+                )
+            unit = _translate_hole(child, current_var, ctx)
             units.append(unit)
             current_var = unit.var_name
         elif tid == "PartDesign::Fillet":
@@ -599,6 +608,158 @@ def _translate_revolution(
 
 
 # ---------------------------------------------------------------------------
+# Hole — parametric drilled hole (tier 2)
+# ---------------------------------------------------------------------------
+
+
+def _hole_carve_expression(hole) -> tuple[str, str, set[str]]:
+    """Build the build123d expression for a Hole's carve (subtractive shape).
+
+    Returns ``(extrude_expr, comment_note, imports)`` where ``extrude_expr``
+    is an ``extrude(Sketch() + plane * (Circle(r) + Circle(r) + ...),
+    amount=-(depth + tip_height))`` carving the hole into the body.
+
+    Shared between ``_translate_hole`` (body-chain emit) and
+    ``_hole_prism_expression`` (Pattern Original emit).
+    """
+    if str(getattr(hole, "DepthType", "Dimension")) != "Dimension":
+        raise UnsupportedFeatureError(
+            hole.TypeId,
+            f"{hole.Label} (DepthType={hole.DepthType!r}; v1 supports 'Dimension')",
+        )
+    if str(getattr(hole, "HoleCutType", "None")) != "None":
+        raise UnsupportedFeatureError(
+            hole.TypeId,
+            f"{hole.Label} (HoleCutType={hole.HoleCutType!r}; v1 supports 'None')",
+        )
+    if bool(getattr(hole, "Threaded", False)) or bool(
+        getattr(hole, "ModelThread", False)
+    ):
+        raise UnsupportedFeatureError(
+            hole.TypeId,
+            f"{hole.Label} (Threaded={hole.Threaded}, ModelThread={hole.ModelThread} "
+            "— v1 doesn't emit thread geometry)",
+        )
+    if bool(getattr(hole, "Tapered", False)):
+        raise UnsupportedFeatureError(
+            hole.TypeId, f"{hole.Label} (Tapered Hole not yet supported)",
+        )
+
+    profile = hole.Profile
+    if isinstance(profile, (list, tuple)):
+        profile = profile[0]
+    sketch = profile
+
+    diameter = float(hole.Diameter.Value)
+    depth = float(hole.Depth.Value)
+    drill_point = str(getattr(hole, "DrillPoint", "Flat"))
+    drill_angle_deg: float | None = None
+    if drill_point == "Angled":
+        drill_angle_deg = float(hole.DrillPointAngle.Value)
+        half_apex_rad = math.radians((180.0 - drill_angle_deg) / 2.0)
+        tip_height = (diameter / 2.0) / math.tan(half_apex_rad)
+    else:
+        tip_height = 0.0
+    total_depth = depth + tip_height
+    reversed_ = bool(getattr(hole, "Reversed", False))
+    amount = total_depth if reversed_ else -total_depth
+
+    centers: list[tuple[float, float]] = []
+    for i, g in enumerate(sketch.Geometry):
+        if type(g).__name__ != "Circle":
+            continue
+        try:
+            if sketch.getConstruction(i):
+                continue
+        except Exception:
+            pass
+        centers.append((float(g.Center.x), float(g.Center.y)))
+    if not centers:
+        raise UnsupportedFeatureError(
+            hole.TypeId,
+            f"{hole.Label} (sketch contains no positional circles)",
+        )
+
+    r = diameter / 2.0
+    circle_terms = []
+    for cx, cy in centers:
+        if abs(cx) < 1e-6 and abs(cy) < 1e-6:
+            circle_terms.append(f"Circle({format_value(r)})")
+        else:
+            circle_terms.append(
+                f"(Pos({format_value(cx)}, {format_value(cy)}) * Circle({format_value(r)}))"
+            )
+    inner = " + ".join(circle_terms)
+
+    plane = _plane_expr(sketch.Placement)
+    if plane is None:
+        face_expr = f"Sketch() + ({inner})"
+    else:
+        face_expr = f"Sketch() + {plane} * ({inner})"
+
+    imports = {"Sketch", "Circle", "extrude"}
+    if any(abs(cx) > 1e-6 or abs(cy) > 1e-6 for cx, cy in centers):
+        imports.add("Pos")
+    if plane is not None:
+        imports.add("Plane")
+
+    extrude_expr = f"extrude({face_expr}, amount={format_value(amount)})"
+    tip_note = (
+        f" + {tip_height:.3f}mm drill tip ({drill_point}, {drill_angle_deg}°)"
+        if drill_point == "Angled"
+        else ""
+    )
+    comment = (
+        f"D={diameter}, depth={depth}{tip_note}, "
+        f"{len(centers)} location{'s' if len(centers) != 1 else ''}"
+    )
+    return extrude_expr, comment, imports
+
+
+def _hole_prism_expression(hole, ctx: TranslationContext):
+    """``_prism_expression`` adapter for Hole-as-Pattern-Original. Subtractive."""
+    extrude_expr, _comment, imports = _hole_carve_expression(hole)
+    return ("-", extrude_expr, imports)
+
+
+def _translate_hole(
+    hole, base_var: str, ctx: TranslationContext
+) -> TranslationUnit:
+    """Emit a PartDesign::Hole as a parametric cylindrical subtraction.
+
+    v1 supports: ``DepthType='Dimension'``, ``DrillPoint='Flat' | 'Angled'``,
+    ``HoleCutType='None'``, non-threaded, non-tapered. Each circle in the
+    Profile sketch becomes a hole location; the *Hole.Diameter* overrides
+    the sketch circle's radius (the sketch only positions the hole).
+
+    Angled drill points are approximated by over-extruding the cylinder by
+    the tip's nominal height ``(D/2) / tan((180 - DrillPointAngle) / 2)``.
+    Exact for through-holes; for blind holes the result is a slight
+    over-carve of an annular region near the tip.
+    """
+    profile = hole.Profile
+    sketch = profile[0] if isinstance(profile, (list, tuple)) else profile
+    extrude_expr, note, imports = _hole_carve_expression(hole)
+    var = hole.Name
+    line = f"{var} = {base_var} - {extrude_expr}"
+    unit = TranslationUnit(
+        var_name=var,
+        imports=imports,
+        lines=[line],
+        comment=f"PartDesign::Hole {hole.Label!r}: {note}",
+    )
+    ctx.add_step(
+        feature_type="hole",
+        feature_name=hole.Name,
+        depends_on=[base_var, sketch.Name],
+        renamed_from_default=(hole.Label != hole.Name),
+        build123d_code=line,
+        properties=extract_properties(getattr(hole, "Shape", None)),
+    )
+    return unit
+
+
+# ---------------------------------------------------------------------------
 # Groove — subtractive revolution (tier 2)
 # ---------------------------------------------------------------------------
 
@@ -944,10 +1105,12 @@ def _prism_expression(orig, ctx: TranslationContext):
     material change. Restricted to Type='Length' Pad/Pocket in v1.
     """
     tid = orig.TypeId
+    if tid == "PartDesign::Hole":
+        return _hole_prism_expression(orig, ctx)
     if tid not in ("PartDesign::Pad", "PartDesign::Pocket"):
         raise UnsupportedFeatureError(
             "PartDesign::Pattern",
-            f"Pattern Original is {tid!r}; v1 only supports Pad / Pocket",
+            f"Pattern Original is {tid!r}; v1 only supports Pad / Pocket / Hole",
         )
     orig_type = str(getattr(orig, "Type", "Length"))
     if orig_type not in ("Length", "ThroughAll"):
