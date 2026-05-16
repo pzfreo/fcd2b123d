@@ -5,35 +5,36 @@ every merged PR while running in `/loop` mode. When you (the human)
 come back, read this first — it summarises what changed and what's
 still in flight without needing to scan every PR.
 
-**Last update**: 2026-05-16 (autonomous runway PR — initial state)
+**Last update**: 2026-05-16 (during `/loop`, just finished #75 implementation, about to PR)
 
 ## Currently working on
 
-*idle — awaiting `/loop` invocation*
+**#75 Locations contexts for uniform patterns** — implementation done locally on `feature/locations-contexts-75`.
+PR not yet open. Full suite 237 passed, 4 skipped, 2 xfailed (the #43 and #76 trackers — expected).
 
 ## Recently merged (last 5)
 
+- PR #82 — `docs+tools: autonomous runway` (STATUS, decisions log, preflight, count gate)
 - PR #81 — `test: emit-source assertions` (xfail gates for #43, #75, #76)
 - PR #80 — `docs: prioritised roadmap`
 - PR #79 — `docs: emit code-quality review + style guide + project CLAUDE.md`
 - PR #74 — `test: wire sample_813 into corpus`
-- PR #73 — `feat: Part::Sweep + Part::Loft`
 
 ## Open / WIP (mine)
 
-*none*
+- `feature/locations-contexts-75` — #75 implementation, ready to PR after this STATUS update lands.
 
 ## Abandoned / deferred (with reason)
 
-*none yet*
+*none*
 
 ## Next planned (per docs/roadmap.md)
 
-1. **#75** — Locations contexts for patterns (top-3, ~1 day)
-2. **#76** — FreeCAD Labels for variable names (top-3, 1-2 days)
-3. **#36** — Fillet face-adjacency (top-3, 2-3 days deep refactor)
-4. **#43** — Coherent snap (tier 2, if time permits)
-5. **#77** — Shared helpers module (tier 2, half day)
+1. **#76** — FreeCAD Labels for variable names (top-3, 1-2 days). Next up after #75 lands.
+2. **#36** — Fillet face-adjacency (top-3, 2-3 days deep refactor).
+3. **#43** — Coherent snap (tier 2).
+4. **#77** — Shared helpers module (tier 2, half day).
+5. **#33** — Part::Helix (tier 2, half day).
 
 ## Stop conditions
 
