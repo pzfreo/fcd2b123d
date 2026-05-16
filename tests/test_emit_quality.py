@@ -95,19 +95,27 @@ def test_renamed_sketch_uses_label_as_variable_name() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="tracks #43 — coherent snap needs anchor-point refactor")
 def test_partdesign_example_no_solver_noise_digits() -> None:
-    """``partdesign_example`` contains user-typed `55` and `270` that the
-    FreeCAD constraint solver settled at `54.9999786…` and `270.00003…`.
-    The emit should snap these to the typed values (without breaking BRep
-    validity — see the issue body for the failed naïve-snap experiment)."""
+    """``partdesign_example`` contains user-typed ``55`` and ``270°`` that
+    the FreeCAD constraint solver settled at ``54.9999786…`` and
+    ``270.00003…``. The emit should snap these to the typed values, with
+    geometry preserved via coherent recomputation of the arc's sweep
+    extent and the adjacent Line endpoint (see :mod:`sketch_snap`).
+
+    The arc's *sweep extent* itself (``261.78…``) is a geometrically-derived
+    value, not user-typed — it stays irrational. Same for the Polyline's
+    first point (the arc-end coord), which is computed and not snappable.
+    """
     source = _translate("tests/fixtures/tier2_partdesign/partdesign_example.FCStd")
-    # No 10-significant-digit-near-round-integer literal should appear.
-    bad_patterns = ["54.99997866", "270.0000349", "261.7867"]
+    # The user-typed anchor values must be snapped.
+    bad_patterns = ["54.99997866", "270.0000349"]
     for pat in bad_patterns:
         assert pat not in source, (
             f"emit still contains solver-noise literal {pat!r}; expected snap to round value"
         )
+    # And the snapped values must actually appear.
+    assert "center=(55, 15)" in source, "expected center=(55, 15) after snap"
+    assert "start_angle=270" in source, "expected start_angle=270 after snap"
 
 
 # ---------------------------------------------------------------------------
