@@ -119,6 +119,157 @@ def test_partdesign_example_no_solver_noise_digits() -> None:
 
 
 # ---------------------------------------------------------------------------
+# #94 — atomic Pocket Type='UpToFirst' should resolve to a finite extrude
+# ---------------------------------------------------------------------------
+#
+# Closing this issue means the in-Body UpToFirst resolution
+# (BaseFeature.Shape.Volume - Pocket.Shape.Volume / sketch_area) is
+# extended to the atomic-Pocket case, where the previous solid in
+# document order plays the role of BaseFeature.
+#
+# The seed-2026 fixture 3pin-female-2_54mm-connector contains the only
+# atomic UpToFirst Pocket in the corpus (Pocket002 / 'bottom-pins-cutout').
+# The fixture has downstream Part::FeaturePython Clone blockers (out of
+# scope per SPEC §13.5) so the *full* fixture stays excluded — but we
+# can verify the UpToFirst gap is closed by translating that specific
+# pocket in isolation.
+
+
+def test_atomic_pocket_uptofirst_resolves_to_finite_extrude() -> None:
+    """The 3pin-connector's atomic Pocket002 (Type='UpToFirst', no Body)
+    should translate to a ``previous_solid - extrude(..., amount=-N)``
+    construction with N derived from the volume delta."""
+    import os
+    import sys
+    import subprocess
+
+    fc_py = os.environ.get("FCSTD2B123D_FREECAD_PYTHON")
+    if not fc_py:
+        pytest.skip("FCSTD2B123D_FREECAD_PYTHON not set")
+    fc_pp = os.environ.get("FCSTD2B123D_FREECAD_PYTHONPATH", "")
+    src_root = str(__import__("pathlib").Path(__file__).parent.parent / "src")
+
+    snippet = (
+        "import FreeCAD;"
+        "from fcstd2b123d.partdesign import _translate_atomic_pocket;"
+        "from fcstd2b123d.context import TranslationContext;"
+        "from pathlib import Path;"
+        "ctx = TranslationContext(source_path=Path('/tmp/x'));"
+        "doc = FreeCAD.openDocument("
+        "'tests/fixtures/sample_2026/3pin-female-2_54mm-connector.FCStd', hidden=True);"
+        "target = doc.getObject('Pocket002');"
+        "units = _translate_atomic_pocket(target, ctx);"
+        "print(units[0].lines[0])"
+    )
+    out = subprocess.run(
+        [fc_py, "-c", snippet],
+        capture_output=True, text=True, check=False,
+        env={**os.environ, "PYTHONPATH": ":".join(p for p in (src_root, fc_pp) if p)},
+    )
+    assert out.returncode == 0, (
+        f"atomic-UpToFirst translator raised:\n{out.stderr}"
+    )
+    line = out.stdout.strip()
+    assert "extrude(" in line, f"expected extrude(...) call; got: {line!r}"
+    assert "amount=-" in line, (
+        f"expected negative extrude amount (carve direction); got: {line!r}"
+    )
+    # The previous solid (Pocket001) must be the base of the subtraction.
+    assert "Pocket001 -" in line or "pocket_001 -" in line.lower(), (
+        f"expected previous-solid (Pocket001) as base; got: {line!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# #92 / #97 — Part::Chamfer / Part::Fillet (Part workbench dressup)
+# ---------------------------------------------------------------------------
+#
+# Closing these issues means top-level ``Part::Chamfer`` and ``Part::Fillet``
+# (distinct from ``PartDesign::Chamfer`` / ``PartDesign::Fillet`` which are
+# Body features) translate to build123d ``chamfer(...)`` / ``fillet(...)``
+# calls on the parent's shape variable.
+#
+# The available corpus fixtures with these features (SM-S4303R-2-arms-small-horn,
+# 2x5-pin-box-header) have *additional* downstream blockers (edge selection
+# drift after Mirror/MultiFuse, or Part::FeaturePython Clone) that keep the
+# full fixtures excluded. The translator itself is verified by running the
+# handler in isolation on one fixture's Chamfer and asserting reasonable
+# output — same pattern as the #94 atomic-Pocket UpToFirst test.
+
+
+def test_part_chamfer_emits_chamfer_call() -> None:
+    """SM-S4303R's first Part::Chamfer should translate to a
+    ``chamfer(_edges_at(...), length=...)`` line."""
+    import os
+    import subprocess
+
+    fc_py = os.environ.get("FCSTD2B123D_FREECAD_PYTHON")
+    if not fc_py:
+        pytest.skip("FCSTD2B123D_FREECAD_PYTHON not set")
+    fc_pp = os.environ.get("FCSTD2B123D_FREECAD_PYTHONPATH", "")
+    src_root = str(__import__("pathlib").Path(__file__).parent.parent / "src")
+    snippet = (
+        "import FreeCAD;"
+        "from fcstd2b123d.partdesign import _translate_part_chamfer;"
+        "from fcstd2b123d.context import TranslationContext;"
+        "from pathlib import Path;"
+        "ctx = TranslationContext(source_path=Path('/tmp/x'));"
+        "doc = FreeCAD.openDocument("
+        "'tests/fixtures/sample_813/SM-S4303R-2-arms-small-horn.FCStd', hidden=True);"
+        "target = doc.getObject('Chamfer');"
+        "print(_translate_part_chamfer(target, ctx)[0].lines[0])"
+    )
+    out = subprocess.run(
+        [fc_py, "-c", snippet], capture_output=True, text=True, check=False,
+        env={**os.environ, "PYTHONPATH": ":".join(p for p in (src_root, fc_pp) if p)},
+    )
+    assert out.returncode == 0, f"Part::Chamfer translator raised:\n{out.stderr}"
+    line = out.stdout.strip()
+    assert "chamfer(_edges_at(" in line, (
+        f"expected chamfer(_edges_at(...)) call; got: {line!r}"
+    )
+    assert "length=" in line, (
+        f"expected length= keyword on chamfer; got: {line!r}"
+    )
+
+
+def test_part_fillet_emits_fillet_call() -> None:
+    """SM-S4303R's Part::Fillet should translate to a
+    ``fillet(_edges_at(...), radius=...)`` line."""
+    import os
+    import subprocess
+
+    fc_py = os.environ.get("FCSTD2B123D_FREECAD_PYTHON")
+    if not fc_py:
+        pytest.skip("FCSTD2B123D_FREECAD_PYTHON not set")
+    fc_pp = os.environ.get("FCSTD2B123D_FREECAD_PYTHONPATH", "")
+    src_root = str(__import__("pathlib").Path(__file__).parent.parent / "src")
+    snippet = (
+        "import FreeCAD;"
+        "from fcstd2b123d.partdesign import _translate_part_fillet;"
+        "from fcstd2b123d.context import TranslationContext;"
+        "from pathlib import Path;"
+        "ctx = TranslationContext(source_path=Path('/tmp/x'));"
+        "doc = FreeCAD.openDocument("
+        "'tests/fixtures/sample_813/SM-S4303R-2-arms-small-horn.FCStd', hidden=True);"
+        "target = doc.getObject('Fillet');"
+        "print(_translate_part_fillet(target, ctx)[0].lines[0])"
+    )
+    out = subprocess.run(
+        [fc_py, "-c", snippet], capture_output=True, text=True, check=False,
+        env={**os.environ, "PYTHONPATH": ":".join(p for p in (src_root, fc_pp) if p)},
+    )
+    assert out.returncode == 0, f"Part::Fillet translator raised:\n{out.stderr}"
+    line = out.stdout.strip()
+    assert "fillet(_edges_at(" in line, (
+        f"expected fillet(_edges_at(...)) call; got: {line!r}"
+    )
+    assert "radius=" in line, (
+        f"expected radius= keyword on fillet; got: {line!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # #77 — shared-helpers CLI flag should switch from inlining to importing
 # ---------------------------------------------------------------------------
 

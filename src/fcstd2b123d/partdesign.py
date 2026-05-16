@@ -360,29 +360,34 @@ def _translate_pad(
 _THROUGH_ALL_LENGTH = 1_000_000.0
 
 
-def _resolve_pocket_uptoface_length(pocket) -> float:
+def _resolve_pocket_uptoface_length(pocket, base_volume: float | None = None) -> float:
     """For Pocket.Type in ('UpToFirst', 'UpToFace'), compute the effective
     carve length by inspecting the FreeCAD-evaluated body shape.
 
-    ``carved_volume = BaseFeature.Shape.Volume - Pocket.Shape.Volume``;
-    dividing by the sketch profile's area gives the depth the carve
-    actually went. This lets us emit ``UpToFirst`` / ``UpToFace`` as a
-    regular ``Type='Length'`` extrude — the translator never needs to
-    track or resolve build123d's face-selection API.
+    ``carved_volume = base_volume - Pocket.Shape.Volume``; dividing by the
+    sketch profile's area gives the depth the carve actually went. This
+    lets us emit ``UpToFirst`` / ``UpToFace`` as a regular ``Type='Length'``
+    extrude — the translator never needs to track or resolve build123d's
+    face-selection API.
+
+    ``base_volume`` defaults to ``pocket.BaseFeature.Shape.Volume`` (the
+    in-Body case). For atomic Pockets the caller passes the previous
+    solid's volume — there's no BaseFeature.
 
     Assumes the carve is a prism (no taper, no curved bottom). Holds for
     the way both modes are used in the library: a sketch + planar normal.
     """
     import Part  # lazy
-    base_feature = pocket.BaseFeature
-    if base_feature is None or not hasattr(base_feature, "Shape"):
-        raise UnsupportedFeatureError(
-            pocket.TypeId,
-            f"{pocket.Label} ({pocket.Type} Pocket without resolvable BaseFeature)",
-        )
-    base_vol = float(base_feature.Shape.Volume)
+    if base_volume is None:
+        base_feature = pocket.BaseFeature
+        if base_feature is None or not hasattr(base_feature, "Shape"):
+            raise UnsupportedFeatureError(
+                pocket.TypeId,
+                f"{pocket.Label} ({pocket.Type} Pocket without resolvable BaseFeature)",
+            )
+        base_volume = float(base_feature.Shape.Volume)
     own_vol = float(pocket.Shape.Volume)
-    carved = base_vol - own_vol
+    carved = base_volume - own_vol
     if carved <= 0:
         raise UnsupportedFeatureError(
             pocket.TypeId,
@@ -506,13 +511,52 @@ def _axis_expr_from_reference(rev) -> tuple[str, set[str]]:
         if candidate in _AXIS_OF_ORIGIN:
             return _AXIS_OF_ORIGIN[candidate], {"Axis"}
 
-    if getattr(obj, "TypeId", "") == "Sketcher::SketchObject":
+    type_id = getattr(obj, "TypeId", "")
+    if type_id == "Sketcher::SketchObject":
         return _sketch_axis_expr(obj, subs, rev)
+    if type_id == "PartDesign::Line":
+        return _datum_line_axis_expr(obj)
 
     raise UnsupportedFeatureError(
         rev.TypeId,
         f"{rev.Label} (ReferenceAxis={name!r}/{label!r} not supported in tier-2)",
     )
+
+
+def _datum_line_axis_expr(datum) -> tuple[str, set[str]]:
+    """Resolve a ``PartDesign::Line`` (datum line) into a build123d Axis
+    expression. The datum's Placement gives origin (Base) and direction
+    (Rotation applied to the local +Z axis — Datum-line convention).
+
+    If the resolved axis matches a coordinate axis through the origin,
+    emit the ``Axis.X`` / ``Axis.Y`` / ``Axis.Z`` shorthand. Otherwise
+    emit an explicit ``Axis((ox, oy, oz), (dx, dy, dz))`` call.
+    """
+    import FreeCAD  # lazy
+
+    placement = datum.Placement
+    origin = placement.Base
+    direction = placement.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+
+    for axis_name, vec in (
+        ("Axis.X", FreeCAD.Vector(1, 0, 0)),
+        ("Axis.Y", FreeCAD.Vector(0, 1, 0)),
+        ("Axis.Z", FreeCAD.Vector(0, 0, 1)),
+    ):
+        if (
+            abs(direction.x - vec.x) < 1e-9
+            and abs(direction.y - vec.y) < 1e-9
+            and abs(direction.z - vec.z) < 1e-9
+            and abs(origin.x) < 1e-9
+            and abs(origin.y) < 1e-9
+            and abs(origin.z) < 1e-9
+        ):
+            return axis_name, {"Axis"}
+
+    return (
+        f"Axis(({vfmt(origin.x, origin.y, origin.z)}), "
+        f"({vfmt(direction.x, direction.y, direction.z)}))"
+    ), {"Axis"}
 
 
 def _sketch_axis_expr(sketch, subs, rev) -> tuple[str, set[str]]:
@@ -1649,11 +1693,11 @@ def _translate_atomic_pocket(pocket, ctx: TranslationContext) -> list[Translatio
     prism (not the bolt-with-hex-socket the designer presumably wanted).
     """
     pocket_type = str(getattr(pocket, "Type", "Length"))
-    if pocket_type not in {"Length", "ThroughAll"}:
+    if pocket_type not in {"Length", "ThroughAll", "UpToFirst", "UpToFace"}:
         raise UnsupportedFeatureError(
             pocket.TypeId,
             f"{pocket.Label} (atomic Pocket.Type={pocket_type!r}; tier-2 atomic "
-            f"Pocket only supports 'Length' and 'ThroughAll')",
+            f"Pocket supports 'Length', 'ThroughAll', 'UpToFirst', 'UpToFace')",
         )
 
     profile = pocket.Profile
@@ -1661,6 +1705,44 @@ def _translate_atomic_pocket(pocket, ctx: TranslationContext) -> list[Translatio
         profile = profile[0]
     sketch_var = profile.Name
     reversed_ = bool(getattr(pocket, "Reversed", False))
+
+    if pocket_type in ("UpToFirst", "UpToFace"):
+        # Atomic UpToFirst/UpToFace: there's no BaseFeature to read the
+        # pre-carve volume from. The previous solid in document order
+        # plays that role — same chaining semantic as atomic ThroughAll.
+        # The effective carve length is resolved from the volume delta.
+        prev = _previous_solid_in_doc_with_typeid(pocket)
+        if prev is None:
+            raise UnsupportedFeatureError(
+                pocket.TypeId,
+                f"{pocket.Label} (atomic {pocket_type} Pocket with no previous solid)",
+            )
+        base_var, _base_typeid = prev
+        base_volume = float(prev_obj.Shape.Volume) if (prev_obj := pocket.Document.getObject(base_var)) else 0.0
+        length = _resolve_pocket_uptoface_length(pocket, base_volume=base_volume)
+        amount = length if reversed_ else -length
+        unit = TranslationUnit(
+            var_name=pocket.Name,
+            label=pocket.Label,
+            imports={"extrude"},
+            lines=[
+                f"{pocket.Name} = {base_var} - "
+                f"extrude({sketch_var}, amount={format_value(amount)})"
+            ],
+            comment=f"PartDesign::Pocket {pocket.Label!r} "
+                    f"(body-less, {pocket_type} → length={length:.4g})"
+                    + (" (reversed)" if reversed_ else ""),
+        )
+        deps = [base_var, sketch_var]
+        ctx.add_step(
+            feature_type="pocket",
+            feature_name=pocket.Name,
+            depends_on=deps,
+            renamed_from_default=(pocket.Label != pocket.Name),
+            build123d_code=unit.lines[0],
+            properties=extract_properties(getattr(pocket, "Shape", None)),
+        )
+        return [unit]
 
     if pocket_type == "ThroughAll":
         # Body-less ThroughAll Pocket: FreeCAD subtracts from the previous
@@ -2145,6 +2227,104 @@ def _translate_part_mirroring(mir, ctx: TranslationContext) -> list[TranslationU
     return [unit]
 
 
+def _translate_part_dressup(
+    obj, ctx: TranslationContext, *, builder: str, size_kw: str, feature_type: str
+) -> list[TranslationUnit]:
+    """Shared emit for ``Part::Chamfer`` / ``Part::Fillet`` — they share property
+    layout (``Base`` object + ``Edges`` list of ``(idx, s1, s2)`` tuples).
+
+    Phase-1 scope: all edges must share the same ``s1 == s2`` (symmetric
+    bevel/radius) and the same value across edges. Asymmetric or
+    variable-per-edge raise UnsupportedFeatureError — the only fixtures
+    in current library samples are uniform symmetric, so the gain from
+    supporting variants doesn't pay for the risk of subtle mis-translation.
+    """
+    base = obj.Base
+    if base is None or not hasattr(base, "Shape"):
+        raise UnsupportedFeatureError(
+            obj.TypeId, f"{obj.Label} ({obj.TypeId} has no Base shape)"
+        )
+    base_var = base.Name
+    edges = list(obj.Edges)
+    if not edges:
+        raise UnsupportedFeatureError(
+            obj.TypeId, f"{obj.Label} ({obj.TypeId}.Edges is empty)"
+        )
+    sizes = [(s1, s2) for _idx, s1, s2 in edges]
+    if any(abs(s1 - s2) > 1e-12 for s1, s2 in sizes):
+        raise UnsupportedFeatureError(
+            obj.TypeId,
+            f"{obj.Label} (asymmetric {obj.TypeId} not yet supported; "
+            f"all edges must have equal sizes)",
+        )
+    s0 = sizes[0][0]
+    if any(abs(s - s0) > 1e-12 for s, _ in sizes):
+        raise UnsupportedFeatureError(
+            obj.TypeId,
+            f"{obj.Label} (variable-per-edge {obj.TypeId} not yet supported; "
+            f"all edges must share the same size)",
+        )
+
+    parent_shape = base.Shape
+    parent_edges = parent_shape.Edges
+    midpoints: list[tuple[float, float, float]] = []
+    for idx, _s1, _s2 in edges:
+        i = idx - 1  # Part::Chamfer / Part::Fillet use 1-based indices
+        if i < 0 or i >= len(parent_edges):
+            raise UnsupportedFeatureError(
+                obj.TypeId,
+                f"{obj.Label} (edge index {idx} out of range; "
+                f"parent has {len(parent_edges)} edges)",
+            )
+        midpoints.append(_edge_midpoint(parent_edges[i]))
+
+    midpoints_repr = _format_midpoints(midpoints)
+    line = (
+        f"{obj.Name} = {builder}(_edges_at({base_var}, {midpoints_repr}), "
+        f"{size_kw}={format_value(s0)})"
+    )
+    unit = TranslationUnit(
+        var_name=obj.Name,
+        label=obj.Label,
+        imports={builder},
+        lines=[line],
+        comment=f"{obj.TypeId} {obj.Label!r}: {size_kw}={s0} on {len(edges)} edges of {base_var}",
+        helpers={"_edges_at"},
+    )
+    ctx.add_step(
+        feature_type=feature_type,
+        feature_name=obj.Name,
+        depends_on=[base_var],
+        renamed_from_default=(obj.Label != obj.Name),
+        build123d_code=line,
+        properties=extract_properties(getattr(obj, "Shape", None)),
+    )
+    return [unit]
+
+
+def _translate_part_chamfer(cha, ctx: TranslationContext) -> list[TranslationUnit]:
+    """Part workbench ``Part::Chamfer`` → build123d ``chamfer(...)``.
+
+    Different shape from ``PartDesign::Chamfer``: ``cha.Base`` is the parent
+    object directly (not a ``(parent, [Edge1, ...])`` tuple), and ``cha.Edges``
+    is a list of ``(edge_index, size1, size2)`` tuples (1-based edge indices).
+    """
+    return _translate_part_dressup(
+        cha, ctx, builder="chamfer", size_kw="length", feature_type="chamfer"
+    )
+
+
+def _translate_part_fillet(fil, ctx: TranslationContext) -> list[TranslationUnit]:
+    """Part workbench ``Part::Fillet`` → build123d ``fillet(...)``.
+
+    Same property layout as ``Part::Chamfer`` — Edges entries are
+    ``(idx, radius1, radius2)`` where the two radii are usually equal.
+    """
+    return _translate_part_dressup(
+        fil, ctx, builder="fillet", size_kw="radius", feature_type="fillet"
+    )
+
+
 TIER2_HANDLERS = {
     "PartDesign::Body": translate_body,
     # PartDesign features at the document level (no containing Body) —
@@ -2162,6 +2342,8 @@ TIER2_HANDLERS = {
     "Part::Revolution": _translate_part_revolution,
     "Part::Sweep": _translate_part_sweep,
     "Part::Loft": _translate_part_loft,
+    "Part::Chamfer": _translate_part_chamfer,
+    "Part::Fillet": _translate_part_fillet,
     "Part::Compound": _translate_part_compound,
     "Part::Mirroring": _translate_part_mirroring,
     # Standalone sketch at the document level.

@@ -23,7 +23,7 @@ from tests.test_translator_corpus import EXCLUDED_FROM_TEST, FIXTURE_DIRS
 # bringing the total to 237. Should grow over time as issues close and
 # fixtures move from EXCLUDED back to passing — never shrink without
 # a justified update to this constant.
-EXPECTED_MIN_RUNNING_COUNT = 237
+EXPECTED_MIN_RUNNING_COUNT = 238
 
 
 def test_corpus_unexcluded_count_floor() -> None:

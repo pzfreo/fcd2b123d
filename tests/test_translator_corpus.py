@@ -116,7 +116,7 @@ EXCLUDED_FROM_TEST = {
     # Mesh::Feature — explicitly out of scope (v1 is solid CAD only):
     "4mm_Pole_Nock_and_3mm_Pin_Nock",
     # Other Part-workbench dressup / clone gaps:
-    "SM-S4303R-2-arms-small-horn",              # Part::Chamfer (top-level Part-workbench chamfer — no translator)
+    "SM-S4303R-2-arms-small-horn",              # downstream edge-selection drift after Mirror/MultiFuse (#36 territory; Part::Chamfer/Fillet handlers now exist via #92/#97 but midpoints don't reproject)
     "KP08",                                     # PartDesign::FeatureBase Clone (Body-clone primitive; #37-adjacent)
     "DN15_Stamped_Flange",                      # PolarPattern axis on rotated sketch (sub-issue of #25)
     # Verify failures — translation succeeds but geometry diverges:
@@ -154,8 +154,7 @@ EXCLUDED_FROM_TEST = {
     "2x5-pin-box-header-male-right-angle",      # Part::Chamfer top-level (#92)
     "Chamfered_rectangular_bend",               # Part::Thickness (#93)
     "DN15_FIG_130",                             # Part::Thickness (#93)
-    "3pin-female-2_54mm-connector",             # atomic Pocket UpToFirst (#94)
-    "Generic_siphon",                           # Revolution ReferenceAxis='DatumLine' (#95)
+    "3pin-female-2_54mm-connector",             # Part::FeaturePython Clone downstream (SPEC §13.5; atomic UpToFirst now works via #94 fix)
     # Pre-existing translator limits surfaced again by this sample:
     "IgnusNutMount",                            # Fillet R=3 exceeds build123d/OCCT capability on B-spline edges (#36)
     "T8_leadscrew_150mm",                       # Part::Helix-bearing leadscrew exceeds 30s translator timeout (#33)
