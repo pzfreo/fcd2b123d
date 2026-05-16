@@ -79,17 +79,54 @@ Fixture directories:
 - `tests/fixtures/tier{1..6}_*` — synthetic per-tier coverage.
 - `tests/fixtures/tier{3,4,6}_corpus*`, `sample_813` — random library samples.
 
-## "Do it properly or not at all"
+## Do it properly or not at all
 
-This project's mantra. Specifically banned:
+**The bar is human-readable, parametrically meaningful build123d
+Python. If we can't meet it for a feature, the translator refuses with
+`UnsupportedFeatureError` — it never ships theatre.**
 
-- **Shape-import / STEP round-trip fallback**: removed in PR #59. Don't
-  re-add. If a FreeCAD feature can't be parametrically translated, the
-  translator must refuse cleanly (UnsupportedFeatureError) — the user
-  can already STEP-export from FreeCAD without us.
-- **Pseudo-success**: a translator that emits something that *executes*
-  but produces wrong geometry is worse than one that refuses. SPEC §13.5
-  documents the cases we deliberately keep out of scope.
+This was the lesson from PR #40 → PR #59 (the shape-import incident).
+A "shape-import fallback" was added that, for features outside v1
+scope, would export the resolved BRep from FreeCAD to STEP and emit
+`import_step("sidecar.step")`. It made the coverage numbers look good
+but produced output the user could already get in two clicks from
+FreeCAD's STEP export plus build123d's `import_step` — the translator
+added nothing, and the resulting `.py` was opaque, depended on a
+sidecar file, and counted as a "pass" only in name. PR #59 ripped
+it out. SPEC §13.5 documents the cases we deliberately keep out of
+scope as a result.
+
+Rules that fall out of that lesson:
+
+- **Output must be readable, parametrically meaningful build123d
+  Python.** Code another engineer or LLM could read, modify, and
+  re-run with different dimensions. If the emit is mechanically-
+  generated noise, depends on a sidecar BRep, or is just a wrapper
+  around two existing tools, it's not done.
+- **Pseudo-success is worse than honest failure.** A translator that
+  emits something that *executes* but produces wrong / unusable
+  geometry is worse than one that refuses cleanly — silent failure
+  poisons the corpus metrics and trains the user to trust output
+  they shouldn't.
+- **Round-trip / wrapper patterns are banned.** Specifically: STEP /
+  IGES / BRep export-then-import paths. The user can already do that
+  with FreeCAD's exporter plus `build123d.import_step` — we add zero
+  value and lose the parametric story. Banned even when it would
+  "fix" a hard-to-translate fixture.
+- **Refuse rather than fake it.** When a FreeCAD feature can't be
+  parametrically translated, raise `UnsupportedFeatureError` with a
+  message naming the gap. The user can choose to file an issue, fix
+  the translator, or fall back to FreeCAD's own export — we don't
+  pretend.
+- **When you spot this pattern in existing code, flag it.** Don't
+  extend a workaround because it's already there. Surface it to the
+  user; let them decide whether to keep it, remove it, or replace it
+  with a real translator.
+
+This rule overrides "make tests pass" and "improve the corpus
+pass-rate" when those are in tension with output quality. The
+sample_813 audit (currently 60/86 pass) is honest because the 26
+failures are real "we can't yet" cases, not fake handlers.
 
 ## Auto-merge policy
 
