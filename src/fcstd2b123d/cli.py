@@ -35,9 +35,19 @@ def main(argv: list[str] | None = None) -> int:
              "FreeCAD shape, so you can confirm the translated build123d "
              "Python matches by running `fcstd2b123d-verify`.",
     )
+    parser.add_argument(
+        "--shared-helpers", action="store_true", dest="shared_helpers",
+        help="Import runtime helpers (_edges_at, _pattern_union, …) from "
+             "``fcstd2b123d.runtime`` instead of inlining them at the top of "
+             "the output. Saves 20-40 lines per file when translating many "
+             "fixtures; requires the consumer to have `fcstd2b123d` "
+             "installed at runtime.",
+    )
     args = parser.parse_args(argv)
 
-    source, ctx = translate_with_context(args.input)
+    source, ctx = translate_with_context(
+        args.input, shared_helpers=args.shared_helpers
+    )
     if args.output is None:
         sys.stdout.write(source)
     else:

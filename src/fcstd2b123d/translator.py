@@ -82,8 +82,14 @@ def _names_used_as_sweep_spines(doc) -> set[str]:
 
 def translate_with_context(
     fcstd_path: Path | str,
+    shared_helpers: bool = False,
 ) -> tuple[str, TranslationContext]:
-    """Translate an .FCStd file. Return (build123d_source, context)."""
+    """Translate an .FCStd file. Return (build123d_source, context).
+
+    When ``shared_helpers`` is True, the emit imports helpers from
+    ``fcstd2b123d.runtime`` instead of inlining them — see
+    ``emitter.render_module``.
+    """
     path = Path(fcstd_path)
     ctx = TranslationContext(
         source_path=path, freecad_version=freecad_version()
@@ -121,12 +127,16 @@ def translate_with_context(
             units.extend(handler(obj, ctx))
 
     source = render_module(
-        units, path, parameters=ctx.parameters, doc_description=doc_description
+        units,
+        path,
+        parameters=ctx.parameters,
+        doc_description=doc_description,
+        shared_helpers=shared_helpers,
     )
     return source, ctx
 
 
-def translate(fcstd_path: Path | str) -> str:
+def translate(fcstd_path: Path | str, shared_helpers: bool = False) -> str:
     """Translate an .FCStd file to build123d Python source (compat shim)."""
-    source, _ctx = translate_with_context(fcstd_path)
+    source, _ctx = translate_with_context(fcstd_path, shared_helpers=shared_helpers)
     return source
