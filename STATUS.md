@@ -5,36 +5,50 @@ every merged PR while running in `/loop` mode. When you (the human)
 come back, read this first — it summarises what changed and what's
 still in flight without needing to scan every PR.
 
-**Last update**: 2026-05-16 (during `/loop`, just finished #75 implementation, about to PR)
+**Last update**: 2026-05-16 (during `/loop`, after PR #84 merge; about to start #36)
 
 ## Currently working on
 
-**#75 Locations contexts for uniform patterns** — implementation done locally on `feature/locations-contexts-75`.
-PR not yet open. Full suite 237 passed, 4 skipped, 2 xfailed (the #43 and #76 trackers — expected).
+*Idle/transition* — just merged #76 (FreeCAD Labels). Next: #36 Fillet
+face-adjacency. About to branch.
 
 ## Recently merged (last 5)
 
-- PR #82 — `docs+tools: autonomous runway` (STATUS, decisions log, preflight, count gate)
-- PR #81 — `test: emit-source assertions` (xfail gates for #43, #75, #76)
+- PR #84 — `feat: FreeCAD Labels for variable names + module docstring (closes #76)`
+- PR #83 — `feat: Locations contexts for uniform patterns (closes #75)`
+- PR #82 — `docs+tools: autonomous runway`
+- PR #81 — `test: emit-source assertions`
 - PR #80 — `docs: prioritised roadmap`
-- PR #79 — `docs: emit code-quality review + style guide + project CLAUDE.md`
-- PR #74 — `test: wire sample_813 into corpus`
 
 ## Open / WIP (mine)
 
-- `feature/locations-contexts-75` — #75 implementation, ready to PR after this STATUS update lands.
+*none — just merged*
 
 ## Abandoned / deferred (with reason)
 
-*none*
+*none yet*
+
+## Top 3 status
+
+- ✅ **#75** Locations contexts — merged (PR #83)
+- ✅ **#76** FreeCAD Labels for names — merged (PR #84)
+- ⏭️ **#36** Fillet face-adjacency — next up (deep refactor, 2-3 days est.)
 
 ## Next planned (per docs/roadmap.md)
 
-1. **#76** — FreeCAD Labels for variable names (top-3, 1-2 days). Next up after #75 lands.
-2. **#36** — Fillet face-adjacency (top-3, 2-3 days deep refactor).
-3. **#43** — Coherent snap (tier 2).
-4. **#77** — Shared helpers module (tier 2, half day).
-5. **#33** — Part::Helix (tier 2, half day).
+1. **#36** — Fillet face-adjacency (top-3, deep refactor). Will attempt; may bail and log to autonomous-decisions.md if I can't get a robust solution in two attempts.
+2. **#43** — Coherent snap (tier 2). Risk: requires anchor-point refactor in sketch.py; high regression surface.
+3. **#77** — Shared helpers module (tier 2, half day). Safe cleanup.
+4. **#33** — Part::Helix (tier 2, half day).
+
+## Emit-quality regression gates
+
+- `tests/test_emit_quality.py`:
+  - #75 (PolarLocations) — PASS
+  - #76 (Labels for naming) — PASS
+  - #43 (no solver-noise digits) — xfailed (tracked, will gate on #43 close)
+  - #77 (--shared-helpers flag) — skip stub (awaits CLI flag)
+  - #78 (--style=builder flag) — skip stubs ×2 (awaits CLI flag)
 
 ## Stop conditions
 
@@ -56,4 +70,4 @@ The agent stops and waits when:
    was still running when the loop ended.
 3. **Abandoned / deferred** — issues I tried but couldn't finish.
    `docs/autonomous-decisions.md` has the why-and-what-I-tried.
-4. **Next planned** — what I'd pick up if `/loop`-ed again.
+4. **Top 3 status** — quick view of the highest-priority items.
