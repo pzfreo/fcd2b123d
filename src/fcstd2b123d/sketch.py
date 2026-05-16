@@ -480,18 +480,26 @@ def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
 
 
 def _translate_sketch_algebra(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
-    geometry = [
+    from .sketch_snap import snap_geometry
+
+    raw_geometry = [
         (i, g) for i, g in enumerate(sketch.Geometry)
         if not _is_construction(sketch, i)
     ]
     unsupported_kinds = {
-        type(g).__name__ for _i, g in geometry
+        type(g).__name__ for _i, g in raw_geometry
     } - _SUPPORTED_KINDS
     if unsupported_kinds:
         raise UnsupportedFeatureError(
             sketch.TypeId,
             f"{sketch.Label} (unsupported geometry kinds: {sorted(unsupported_kinds)})",
         )
+
+    # Coherent snap pass (#43): rebuild Arcs / Circles whose anchor params
+    # are near round values, recomputing the sweep extent so wire-closure
+    # is preserved. Lines pass through unchanged.
+    snapped_only = snap_geometry([g for _i, g in raw_geometry])
+    geometry = list(zip([i for i, _ in raw_geometry], snapped_only))
 
     circles = [g for _i, g in geometry if type(g).__name__ == "Circle"]
     ellipses = [g for _i, g in geometry if type(g).__name__ == "Ellipse"]
@@ -713,18 +721,24 @@ def _translate_sketch_builder(sketch, ctx: TranslationContext) -> list[Translati
     so downstream extrude / revolve translators reference the same name as
     the algebra-mode emit.
     """
-    geometry = [
+    from .sketch_snap import snap_geometry
+
+    raw_geometry = [
         (i, g) for i, g in enumerate(sketch.Geometry)
         if not _is_construction(sketch, i)
     ]
     unsupported_kinds = {
-        type(g).__name__ for _i, g in geometry
+        type(g).__name__ for _i, g in raw_geometry
     } - _SUPPORTED_KINDS
     if unsupported_kinds:
         raise UnsupportedFeatureError(
             sketch.TypeId,
             f"{sketch.Label} (unsupported geometry kinds: {sorted(unsupported_kinds)})",
         )
+
+    # Coherent snap pass (#43); see _translate_sketch_algebra for the why.
+    snapped_only = snap_geometry([g for _i, g in raw_geometry])
+    geometry = list(zip([i for i, _ in raw_geometry], snapped_only))
 
     circles = [g for _i, g in geometry if type(g).__name__ == "Circle"]
     ellipses = [g for _i, g in geometry if type(g).__name__ == "Ellipse"]
