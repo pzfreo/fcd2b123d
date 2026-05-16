@@ -50,8 +50,10 @@ def _is_xy_plane(p) -> bool:
 def _plane_expr(placement) -> str | None:
     """Return a build123d Plane(...) expression, or None for XY identity.
 
-    Builds Plane(origin=..., x_dir=..., z_dir=...) by applying the FreeCAD
-    rotation to (1,0,0) and (0,0,1) — the sketch's local X and Z (normal).
+    Detects canonical planes (XY/XZ/YZ + reverses + normal offsets) and emits
+    the short form (``Plane.YZ``, ``Plane.YZ.offset(5)``, ``Plane.YZ.reverse()``)
+    when the placement matches. Falls back to the explicit
+    ``Plane(origin=..., x_dir=..., z_dir=...)`` constructor otherwise.
     """
     if _is_xy_plane(placement):
         return None
@@ -60,11 +62,69 @@ def _plane_expr(placement) -> str | None:
     x_dir = rot.multVec(FreeCAD.Vector(1, 0, 0))
     z_dir = rot.multVec(FreeCAD.Vector(0, 0, 1))
     origin = placement.Base
+
+    canonical = _canonical_plane_expr(origin, x_dir, z_dir)
+    if canonical is not None:
+        return canonical
+
     return (
         f"Plane(origin=({_fmt(origin.x)}, {_fmt(origin.y)}, {_fmt(origin.z)}), "
         f"x_dir=({_fmt(x_dir.x)}, {_fmt(x_dir.y)}, {_fmt(x_dir.z)}), "
         f"z_dir=({_fmt(z_dir.x)}, {_fmt(z_dir.y)}, {_fmt(z_dir.z)}))"
     )
+
+
+# Canonical-plane signatures. ``(x_dir, z_dir)`` tuples → short name.
+# Sourced from build123d itself (Plane.XY / XZ / YZ / YX / ZX / ZY); these
+# are the only orientations the short form actually exists for. Reverses
+# and other rotations of these planes don't have a clean build123d
+# shorthand (``.reverse()`` does NOT compose how a naive read would
+# suggest — see PR-pending discussion), so we don't attempt them.
+_CANONICAL_PLANES: list[tuple[tuple[float, ...], tuple[float, ...], str]] = [
+    ((1.0, 0.0, 0.0), (0.0, 0.0, 1.0), "Plane.XY"),
+    ((1.0, 0.0, 0.0), (0.0, -1.0, 0.0), "Plane.XZ"),
+    ((0.0, 1.0, 0.0), (1.0, 0.0, 0.0), "Plane.YZ"),
+    ((0.0, 1.0, 0.0), (0.0, 0.0, -1.0), "Plane.YX"),
+    ((0.0, 0.0, 1.0), (0.0, 1.0, 0.0), "Plane.ZX"),
+    ((0.0, 0.0, 1.0), (-1.0, 0.0, 0.0), "Plane.ZY"),
+]
+
+
+def _vec_close(a, b, tol: float = 1e-9) -> bool:
+    return all(abs(ax - bx) < tol for ax, bx in zip(a, b))
+
+
+def _canonical_plane_expr(origin, x_dir, z_dir) -> str | None:
+    """Return e.g. ``Plane.YZ`` or ``Plane.YZ.offset(5)`` if the placement
+    matches one of the 6 canonical build123d planes (possibly with origin
+    offset along the normal), else None.
+
+    Conservative on purpose: we only short-form exact matches of the 6
+    canonical (x_dir, z_dir) frames. Other rotations of those planes
+    (e.g. an XZ plane rotated 180° about its normal) emit the explicit
+    ``Plane(origin=..., x_dir=..., z_dir=...)`` form because the
+    candidates build123d gives us — ``.reverse()`` etc. — don't compose
+    the way they read (see cabin_flashlight regression).
+    """
+    x_tuple = (x_dir.x, x_dir.y, x_dir.z)
+    z_tuple = (z_dir.x, z_dir.y, z_dir.z)
+    for x_ref, z_ref, name in _CANONICAL_PLANES:
+        if _vec_close(x_tuple, x_ref) and _vec_close(z_tuple, z_ref):
+            ox, oy, oz = origin.x, origin.y, origin.z
+            # Decompose origin into (offset along z_ref) + (residual in plane).
+            offset = ox * z_ref[0] + oy * z_ref[1] + oz * z_ref[2]
+            residual_x = ox - offset * z_ref[0]
+            residual_y = oy - offset * z_ref[1]
+            residual_z = oz - offset * z_ref[2]
+            if (
+                abs(residual_x) < 1e-9
+                and abs(residual_y) < 1e-9
+                and abs(residual_z) < 1e-9
+            ):
+                if abs(offset) < 1e-9:
+                    return name
+                return f"{name}.offset({_fmt(offset)})"
+    return None
 
 
 _fmt = format_value
