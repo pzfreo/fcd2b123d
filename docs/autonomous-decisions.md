@@ -28,6 +28,68 @@ about*.
 
 ## Entries
 
+### 2026-05-16 — (no PR) — #33 Part::Helix: deeper investigation with pzfreo/wormgear reference
+
+**Context**: user pointed me to ``pzfreo/wormgear`` for working Helix
+examples after my initial bail. Followed up.
+
+**What wormgear does**: production worm-gear generator. Key technique:
+
+  1. Bypass build123d's ``sweep()`` wrapper.
+  2. Convert ``Helix`` to raw ``TopoDS_Wire`` via ``TopExp_Explorer``.
+  3. ``BRepOffsetAPI_MakePipeShell`` with ``SetMode(gp_Dir(0,0,1))``
+     — locks the profile's vertical axis so the radial direction
+     stays constant. Critical for worm gears: tip and root radii
+     stay uniform along the helix.
+  4. STEP-roundtrip to normalise the TopoDS (raw MakePipeShell output
+     has volume==0 in build123d's hands).
+
+**Why this doesn't generalise to FreeCAD's Sweep+Frenet=True**: the
+wormgear pattern produces *constant radial orientation* — perfect for
+thread cross-sections. But FreeCAD's Sweep with ``Frenet=True`` uses
+a *Frenet trihedron* (profile rotates to follow the path's curvature).
+These are different modes, not "two implementations of Frenet".
+
+Empirical numbers on my synthetic sweep_helix fixture
+(1mm triangle profile, pitch=2, height=10, radius=5):
+
+| Mode | Volume |
+|---|---|
+| FreeCAD ``Sweep, Frenet=True``   (truth) | **7.854** |
+| FreeCAD ``Sweep, Frenet=False``           | 3.163 |
+| build123d ``sweep(profile, path=Helix(...))`` | 3.16 |
+| OCP ``MakePipeShell``, default            | 2.44 |
+| OCP ``MakePipeShell, SetMode(True)`` (Frenet trihedron) | 5.24 |
+| OCP ``MakePipeShell, SetMode(gp_Dir(0,0,1))`` (wormgear) | 5.24 |
+
+None of the OCC/build123d modes reproduce FreeCAD's ``Frenet=True``.
+Closest match (``SetMode(True)``) is **33% off** when the helix pitch
+is small relative to the profile — adjacent turns intersect and the
+boolean-merge result depends sensitively on the trihedron convention.
+
+**Decision**: still bail. The wormgear approach is good for *their*
+use case (constant radial orientation). Mapping FreeCAD's
+``Sweep + Frenet=True`` to OCC's ``MakePipeShell`` modes is a real
+semantic gap, likely because of OCCT version differences (build123d's
+OCP wraps a different OCCT vintage than FreeCAD 1.0).
+
+**Alternative considered**: ship a ``helical_sweep`` runtime helper
+using wormgear's pattern, accept that geometry doesn't match FreeCAD
+precisely, note the limit in a comment. Rejected — pseudo-success
+theatre. CLAUDE.md "do it properly or not at all" applies.
+
+**Reversibility**: trivial — prototype was in a scratch script, never
+committed.
+
+**Follow-up**: when build123d ships a ``helical_sweep`` higher-level
+function or an OCCT-version-pinned Frenet implementation, this becomes
+checkable. Library fixtures combining Part::Helix + Part::Sweep stay
+unsupported until then. The wormgear team's own files are downstream
+of this gap; they accept the limitation by living entirely in build123d
+rather than translating from FreeCAD.
+
+---
+
 ### 2026-05-16 — (no PR) — Bail on #33 Part::Helix; build123d sweep-along-helix has capability gap
 
 **Context**: tier-2 roadmap item #33 — translate Part::Helix and use it as
