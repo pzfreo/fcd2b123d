@@ -121,7 +121,9 @@ EXCLUDED_FROM_TEST = {
     "DN15_Stamped_Flange",                      # PolarPattern axis on rotated sketch (sub-issue of #25)
     # Verify failures — translation succeeds but geometry diverges:
     "ANSI-ASME-B18_2_2_Hex_Nut_1_4-20",         # ~7000 ppm volume drift in chamfer-edge selection (#57 precision-edge)
-    "FootPAD",                                  # Hausdorff 8.56 / tol 5.43 (bbox 54mm); #60 — real but unidentified
+    # cabin_door was unblocked by PR #72 (Hausdorff downsampling fix). FootPAD
+    # and WallHungBidet still fail — real geometric divergences tracked by #60.
+    "FootPAD",                                  # Hausdorff 8.56 / tol 5.43 (bbox 54mm); #60 — real, ~ shape divergence not yet identified
     "WallHungBidet",                            # Hausdorff 99 / tol 72 (bbox 721mm); #60 — real geometric difference
     # sample_2026 (seed-2026 random library audit): 69/100 pass; the
     # following 28 are excluded with their current best-known root cause.
