@@ -89,10 +89,22 @@ def translate_with_context(
         source_path=path, freecad_version=freecad_version()
     )
     units: list[TranslationUnit] = []
+    doc_description: str | None = None
     with open_document(path) as doc:
         # Tier-6: pull parameters from Spreadsheet(s) before geometry walk.
         # Handlers consult ctx.parameters when emitting property values.
         ctx.parameters = extract_parameters(doc)
+
+        # Promote a non-default Document.Label or Document.Comment to the
+        # module docstring when set. Most library files leave Label as the
+        # filename — only surface it when the user typed something
+        # meaningful ("M5 socket head cap screw, ISO 4762").
+        doc_label = (getattr(doc, "Label", "") or "").strip()
+        doc_comment = (getattr(doc, "Comment", "") or "").strip()
+        if doc_comment:
+            doc_description = doc_comment
+        elif doc_label and doc_label != path.stem:
+            doc_description = doc_label
 
         owned = _names_owned_by_bodies(doc)
         spines = _names_used_as_sweep_spines(doc)
@@ -108,7 +120,9 @@ def translate_with_context(
                 raise UnsupportedFeatureError(obj.TypeId, obj.Label)
             units.extend(handler(obj, ctx))
 
-    source = render_module(units, path, parameters=ctx.parameters)
+    source = render_module(
+        units, path, parameters=ctx.parameters, doc_description=doc_description
+    )
     return source, ctx
 
 

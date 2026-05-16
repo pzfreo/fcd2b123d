@@ -612,6 +612,7 @@ def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
 
     unit = TranslationUnit(
         var_name=var,
+        label=sketch.Label,
         imports=imports,
         lines=[*pre_lines, f"{var} = {full_expr}"],
         comment=f"Sketcher::SketchObject {sketch.Label!r}: {summary} ({len(loops)} loops)",

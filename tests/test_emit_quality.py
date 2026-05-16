@@ -73,7 +73,6 @@ def test_linear_pattern_uses_locations() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="tracks #76 — Label not yet promoted over Name in variable emit")
 def test_renamed_sketch_uses_label_as_variable_name() -> None:
     """The hex cap screw fixture renamed its hexagon sketch to ``Hexagon`` —
     the emit should reflect that, not call it ``sketch_001``."""

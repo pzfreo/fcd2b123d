@@ -248,6 +248,7 @@ def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
             units.append(
                 TranslationUnit(
                     var_name=placed_var,
+                    label=body.Label,
                     imports=extra_imports,
                     lines=[f"{placed_var} = {expr}"],
                     comment=comment,
@@ -334,6 +335,7 @@ def _translate_pad(
 
     unit = TranslationUnit(
         var_name=pad.Name,
+        label=pad.Label,
         imports=imports,
         lines=[line],
         comment=comment,
@@ -469,6 +471,7 @@ def _translate_pocket(
 
     unit = TranslationUnit(
         var_name=pocket.Name,
+        label=pocket.Label,
         imports={"extrude"},
         lines=[line],
         comment=f"PartDesign::Pocket {pocket.Label!r}: {note}",
@@ -591,6 +594,7 @@ def _translate_revolution(
 
     unit = TranslationUnit(
         var_name=rev.Name,
+        label=rev.Label,
         imports=imports,
         lines=[line],
         comment=f"PartDesign::Revolution {rev.Label!r}: angle={angle}"
@@ -744,6 +748,7 @@ def _translate_hole(
     line = f"{var} = {base_var} - {extrude_expr}"
     unit = TranslationUnit(
         var_name=var,
+        label=hole.Label,
         imports=imports,
         lines=[line],
         comment=f"PartDesign::Hole {hole.Label!r}: {note}",
@@ -801,6 +806,7 @@ def _translate_groove(
 
     unit = TranslationUnit(
         var_name=grv.Name,
+        label=grv.Label,
         imports=imports,
         lines=[line],
         comment=f"PartDesign::Groove {grv.Label!r}: angle={angle}"
@@ -928,6 +934,7 @@ def _dressup_unit(
 
     unit = TranslationUnit(
         var_name=var,
+        label=obj.Label,
         imports={builder},
         lines=[line],
         comment=f"{obj.TypeId} {obj.Label!r}: "
@@ -1045,6 +1052,7 @@ def _translate_draft(
 
     unit = TranslationUnit(
         var_name=var,
+        label=draft.Label,
         imports={"draft", "Plane"},
         lines=[line],
         comment=(
@@ -1536,6 +1544,7 @@ def _translate_pattern(
 
     unit = TranslationUnit(
         var_name=pat.Name,
+        label=pat.Label,
         imports=imports,
         lines=[line],
         comment=f"{pat.TypeId} {pat.Label!r}: {note}",
@@ -1668,6 +1677,7 @@ def _translate_atomic_pocket(pocket, ctx: TranslationContext) -> list[Translatio
         amount = length if reversed_ else -length
         unit = TranslationUnit(
             var_name=pocket.Name,
+            label=pocket.Label,
             imports={"extrude"},
             lines=[
                 f"{pocket.Name} = {base_var} - extrude({sketch_var}, amount={amount})"
@@ -1693,6 +1703,7 @@ def _translate_atomic_pocket(pocket, ctx: TranslationContext) -> list[Translatio
             base_var = prev[0]
             unit = TranslationUnit(
                 var_name=pocket.Name,
+                label=pocket.Label,
                 imports={"extrude"},
                 lines=[
                     f"{pocket.Name} = {base_var} - "
@@ -1706,6 +1717,7 @@ def _translate_atomic_pocket(pocket, ctx: TranslationContext) -> list[Translatio
         else:
             unit = TranslationUnit(
                 var_name=pocket.Name,
+                label=pocket.Label,
                 imports={"extrude"},
                 lines=[
                     f"{pocket.Name} = extrude({sketch_var}, amount={format_value(amount)})"
@@ -1846,6 +1858,7 @@ def _translate_part_extrusion(ext, ctx: TranslationContext) -> list[TranslationU
 
     unit = TranslationUnit(
         var_name=ext.Name,
+        label=ext.Label,
         imports=imports,
         lines=[line],
         comment=f"Part::Extrusion {ext.Label!r}: amount={amount}",
@@ -1907,6 +1920,7 @@ def _translate_part_revolution(rev, ctx: TranslationContext) -> list[Translation
     )
     unit = TranslationUnit(
         var_name=rev.Name,
+        label=rev.Label,
         imports=imports,
         lines=[line],
         comment=f"Part::Revolution {rev.Label!r}: angle={angle}",
@@ -1992,6 +2006,7 @@ def _translate_part_sweep(sw, ctx: TranslationContext) -> list[TranslationUnit]:
     imports = {"sweep"} | path_imports
     unit = TranslationUnit(
         var_name=var,
+        label=sw.Label,
         imports=imports,
         lines=[line],
         comment=f"Part::Sweep {sw.Label!r}: profile={profile_obj.Name}, "
@@ -2037,6 +2052,7 @@ def _translate_part_loft(lt, ctx: TranslationContext) -> list[TranslationUnit]:
     line = f"{var} = loft([{args}]{ruled_arg})"
     unit = TranslationUnit(
         var_name=var,
+        label=lt.Label,
         imports={"loft"},
         lines=[line],
         comment=f"Part::Loft {lt.Label!r}: {len(sections)} sections"
@@ -2070,6 +2086,7 @@ def _translate_part_compound(comp, ctx: TranslationContext) -> list[TranslationU
     line = f"{comp.Name} = Compound([{', '.join(part_vars)}])"
     unit = TranslationUnit(
         var_name=comp.Name,
+        label=comp.Label,
         imports={"Compound"},
         lines=[line],
         comment=f"Part::Compound {comp.Label!r}: {len(links)} parts",
@@ -2108,6 +2125,7 @@ def _translate_part_mirroring(mir, ctx: TranslationContext) -> list[TranslationU
     line = f"{mir.Name} = mirror({source_var}, about={plane_expr})"
     unit = TranslationUnit(
         var_name=mir.Name,
+        label=mir.Label,
         imports={"mirror", "Plane"},
         lines=[line],
         comment=(
