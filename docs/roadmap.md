@@ -4,6 +4,11 @@ Prioritised PM view of open work. The ordering is product-impact-first:
 *what improves the value of the translator to its actual users?* Effort is
 a tie-breaker, not the primary axis.
 
+> **Live progress**: see [`STATUS.md`](../STATUS.md) at the repo root
+> for what's in flight, what's recently merged, and what's deferred.
+> Autonomous-mode work logs non-obvious calls to
+> [`docs/autonomous-decisions.md`](./autonomous-decisions.md).
+
 Last updated: 2026-05-16 (post PR #79).
 
 ## Decision lens
