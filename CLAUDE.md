@@ -60,20 +60,41 @@ Highlights you should not have to re-derive:
 - **Comments**: per-feature provenance carrying the FreeCAD `Label` and
   salient properties. Don't comment what build123d calls already say.
 
-## Fixtures
+## Fixtures — every issue needs one
 
-Every issue needs a reproducer fixture. Per the global CLAUDE.md
-library-first rule:
+**Every issue describing a bug, gap, or limit must be pinned to a
+concrete `.FCStd` test fixture that fails today and passes when fixed.
+The fixture *is* the issue.**
 
-1. **Look in the FreeCAD Parts Library / `tests/fixtures/sample_813/` first.**
-   If a real-world file isolates the gap, use it. Cite the path in the
-   issue.
-2. **Synthesise only when no library file isolates the case.** Many
-   library files have multiple gaps; synth is fine when the only
-   way to test the specific feature is a hand-rolled minimal file.
-3. **Closing an issue requires its fixture to move from `EXCLUDED_FROM_TEST` to passing.**
-   Fixture generators live in `tools/synthesize_fixtures.py`. Each
-   function produces one `.FCStd`; snapshot via `tests/snapshot.py`.
+This rule exists because earlier in the project history a 100-file
+corpus audit identified dozens of gaps but didn't file fixtures
+alongside, leaving us with a backlog of guesswork issues that had to
+be revisited and re-audited later. Don't let that happen again — when
+you find a gap, file the issue *and* commit the fixture in the same
+breath.
+
+- **Library-first.** Look in the FreeCAD Parts Library and
+  `tests/fixtures/sample_813/` before synthesising. Most translator
+  gaps have at least one real fixture in scope. Cite the path in the
+  issue body and add the fixture stem to `EXCLUDED_FROM_TEST` in
+  `tests/test_translator_corpus.py` with the issue number as the
+  inline comment.
+- **Synthesise when no library file isolates the case.** Many
+  library files have multiple gaps and won't translate end-to-end
+  even after a single feature lands. A hand-rolled minimal fixture
+  via `tools/synthesize_fixtures.py` is the right call when the
+  feature can't be tested in isolation otherwise. Snapshot via
+  `tests/snapshot.py` to produce the `.expected.json` and
+  `.pointcloud.json` sidecars.
+- **Closing an issue moves the fixture out of `EXCLUDED_FROM_TEST`.**
+  A PR that doesn't take a fixture from failing/excluded to passing
+  in CI hasn't closed the issue — it's deferred it. The corpus
+  suite running the unexcluded fixture green is the proof.
+- **No fixture, no issue (effectively).** An exploratory issue
+  without a fixture is allowed only when the explicit next step is
+  "find or build the reproducer". A placeholder that sits with no
+  reproducer is on its way to becoming the guesswork the rule
+  exists to prevent.
 
 Fixture directories:
 - `tests/fixtures/tier{1..6}_*` — synthetic per-tier coverage.
