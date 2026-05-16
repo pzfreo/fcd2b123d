@@ -351,6 +351,18 @@ def _body_to_builder(
     if any(_has_inline_sketch_primitive(u.lines[0]) for u in body_units):
         return units
 
+    # If any body unit is a Pattern (Locations multiplier or
+    # _pattern_union), bail to algebra mode. The pattern emits embed
+    # ``extrude(<sketch>, ...)`` inside a larger expression. Inside a
+    # BuildPart context, ``extrude(...)`` has a *side effect* — it adds
+    # the produced prism to the running part — which corrupts the
+    # subsequent multiplication. Algebra-mode pattern emits don't have
+    # this problem because there's no running BuildPart context.
+    # Discovered while implementing phase 2b (#101 / #102) — see
+    # autonomous-decisions.md for the full investigation.
+    if any(_has_pattern_expr(u.lines[0]) for u in body_units):
+        return units
+
     inside_lines: list[str] = []
     inside_imports: set[str] = set()
     inside_helpers: set[str] = set()
@@ -450,6 +462,20 @@ _CONTEXT_AWARE_SKETCH_RE = _re.compile(
 
 def _has_inline_sketch_primitive(line: str) -> bool:
     return bool(_CONTEXT_AWARE_SKETCH_RE.search(line))
+
+
+# Pattern-expression detector: ``Locations(...) * extrude(...)``,
+# ``PolarLocations(...) * extrude(...)``, ``mirror(...)``, or
+# ``_pattern_union(...)``. Any of these inside a builder-mode body line
+# is unsafe — the ``extrude(...)`` arg side-effects the BuildPart, and
+# ``_pattern_union`` runs its own BuildPart internally which conflicts.
+_PATTERN_EXPR_RE = _re.compile(
+    r"\b(?:PolarLocations|GridLocations|Locations|mirror|_pattern_union)\("
+)
+
+
+def _has_pattern_expr(line: str) -> bool:
+    return bool(_PATTERN_EXPR_RE.search(line))
 
 
 def _split_top_level_args(arglist: str) -> list[str]:

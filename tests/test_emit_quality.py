@@ -367,6 +367,14 @@ def test_builder_and_algebra_emit_same_geometry() -> None:
         "tests/fixtures/tier2_partdesign/simple_pad.FCStd",
         "tests/fixtures/tier2_partdesign/pad_with_hole.FCStd",
         "tests/fixtures/tier2_partdesign/pad_with_ellipse.FCStd",
+        # Pattern fixtures — exposed a correctness bug in #78 phase 2a
+        # where the BuildPart-wrapped body had a side effect on
+        # ``extrude(...)`` calls inside ``add(Locations * extrude(...), ...)``
+        # expressions, producing 4/6 (polar) and 3/4 (linear) carves
+        # instead of the correct counts. Now these bodies bail to algebra
+        # mode for correctness — these tests gate that.
+        "tests/fixtures/tier4_patterns/polar_pattern_holes.FCStd",
+        "tests/fixtures/tier4_patterns/linear_pattern_holes.FCStd",
     ]
     for fx in fixtures:
         vols: dict[str, float] = {}
