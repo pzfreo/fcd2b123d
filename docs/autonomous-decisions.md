@@ -28,6 +28,27 @@ about*.
 
 ## Entries
 
+### 2026-05-16 — PR pending — #78 phase 2b (pattern absorption): bailed mid-implementation, found phase 2a bug in process
+
+**Context**: implementing pattern absorption (Pocket + Pattern → ``with PolarLocations(R, N): extrude(...)``) for #101 / #102 inside ``--style=builder``. Mid-implementation, while verifying my new code produced correct geometry, discovered that the *existing* phase 2a (PR #105, already merged to main) has a correctness bug for any body containing a Pattern.
+
+**The bug**: phase 2a converts the algebra-mode pattern line ``polar = pocket - PolarLocations(...) * extrude(hole, 12)`` to ``add(PolarLocations(...) * extrude(hole, 12), mode=Mode.SUBTRACT)``. The ``extrude(hole, 12)`` call inside the ``add(...)`` expression is evaluated WHILE INSIDE the BuildPart context. ``extrude(<sketch>, ...)`` inside BuildPart has a *side effect*: it adds the produced prism to the running part. So the prism gets added once (Mode.ADD default), then the multiplied copies are subtracted — producing 4/6 (polar) or 3/4 (linear) carves instead of the correct counts. Build123d's algebra ``base - expr`` form doesn't trigger this because there's no running BuildPart.
+
+Caught by writing a verification test that compares builder-mode and algebra-mode volumes on the polar_pattern_holes fixture: algebra=11328.58 (correct), builder=11479.38 (1 hole short).
+
+**Decision**:
+
+1. Reverted my in-progress phase 2b code.
+2. Added a ``_has_pattern_expr`` bail in ``_body_to_builder``: any body whose lines contain ``PolarLocations`` / ``GridLocations`` / ``Locations`` / ``mirror`` / ``_pattern_union`` falls back to algebra mode. Safe and correct.
+3. Extended ``test_builder_and_algebra_emit_same_geometry`` to cover ``polar_pattern_holes`` and ``linear_pattern_holes`` — gates against this class of bug returning.
+4. Updated #101 / #102 with the deeper finding: pattern absorption requires a non-trivial structural fix (hoist the prism construction outside BuildPart, then iterate the list with ``add(prism, mode=SUBTRACT)``). Not safe to ship under a /loop iteration without careful design.
+
+**Why**: the user's /loop was "until all the code quality improvements are done. Merge PRs or update issues if blocked." Phase 2b is **blocked** in the sense that the obvious implementation is wrong (extrude side effects); the right implementation requires deliberate work beyond what a loop iteration can do safely. Per CLAUDE.md, refusing to ship correct code is better than shipping pretty-but-wrong code.
+
+**Alternative considered**: hoist the entire pattern's prism list construction outside the BuildPart context, e.g. ``carves = PolarLocations(R, N) * extrude(hole, 12)`` defined above the ``with BuildPart()`` line, then iterate inside. Doable but the structural change leaks more abstractions and the unit-test sample suggests pattern-fixture readability isn't worth the effort right now. Real fix when someone has time to design the hoisting properly.
+
+**Reversibility**: trivial — the bail is one regex + one if-check. Removing later is a code-deletion.
+
 ### 2026-05-16 — (no PR) — #33 Part::Helix: deeper investigation with pzfreo/wormgear reference
 
 **Context**: user pointed me to ``pzfreo/wormgear`` for working Helix
