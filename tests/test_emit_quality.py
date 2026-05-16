@@ -146,21 +146,95 @@ def test_shared_helpers_flag_emits_import_not_inline() -> None:
 
 
 # ---------------------------------------------------------------------------
-# #78 — builder-mode CLI flag should produce `with BuildPart()` output
+# #78 — builder-mode CLI flag should produce `with BuildSketch()` output
 # ---------------------------------------------------------------------------
+#
+# Phase 1: sketches only — the ``--style=builder`` flag dispatches sketch
+# translation through ``_translate_sketch_builder``, producing
+# ``with BuildSketch(plane) as <var>: ...`` blocks followed by
+# ``<var> = <var>.sketch`` so downstream Pad/Pocket/etc. still reference
+# the variable name unchanged. Bodies remain algebra-style for now —
+# phase 2 (BuildPart wrapping) is a separate piece of work.
 
 
-@pytest.mark.skip(reason="awaits #78 — `--style=builder` CLI flag doesn't exist yet")
-def test_builder_mode_uses_with_buildpart() -> None:
-    """With ``--style=builder``, the emit should wrap sketches in
-    ``with BuildSketch(plane):`` and bodies in ``with BuildPart() as part:``,
-    using ``Mode.SUBTRACT`` instead of ``-``."""
-    raise NotImplementedError  # pragma: no cover
+def test_builder_mode_uses_with_buildsketch() -> None:
+    """With ``--style=builder``, every sketch should emit a
+    ``with BuildSketch(...) as <var>:`` block (phase 1)."""
+    import os
+    import subprocess
+
+    fc_py = os.environ.get("FCSTD2B123D_FREECAD_PYTHON")
+    if not fc_py:
+        pytest.skip("FCSTD2B123D_FREECAD_PYTHON not set")
+    env = {**os.environ, "PYTHONPATH":
+           os.environ.get("FCSTD2B123D_FREECAD_PYTHONPATH", "") + ":"
+           + str((__import__('pathlib').Path(__file__).parent.parent / "src"))}
+    out = subprocess.run(
+        [
+            fc_py, "-m", "fcstd2b123d", "--style", "builder",
+            "tests/fixtures/tier2_partdesign/simple_pad.FCStd",
+        ],
+        capture_output=True, text=True, env=env, check=False,
+    )
+    assert out.returncode == 0, f"--style=builder translation failed:\n{out.stderr}"
+    source = out.stdout
+    assert "with BuildSketch(" in source, (
+        "expected `with BuildSketch(...)` block in builder-mode emit"
+    )
+    assert "BuildSketch" in source, "BuildSketch should be in the imports"
+    # Rebinding pattern lets the rest of the body chain stay algebra-style
+    # without renaming the variable.
+    assert ".sketch" in source, (
+        "expected `<var> = <var>.sketch` rebind so downstream extrude / "
+        "revolve calls can use the sketch variable unchanged"
+    )
 
 
-@pytest.mark.skip(reason="awaits #78 — `--style=builder` CLI flag doesn't exist yet")
 def test_builder_and_algebra_emit_same_geometry() -> None:
     """Both ``--style=algebra`` (default) and ``--style=builder`` must
-    produce shapes with the same scalar invariants for every tier-1
-    through tier-4 fixture."""
-    raise NotImplementedError  # pragma: no cover
+    produce shapes with the same volume on a representative slice of
+    tier-2 fixtures (the corpus suite already gates the full set)."""
+    import os
+    import subprocess
+
+    fc_py = os.environ.get("FCSTD2B123D_FREECAD_PYTHON")
+    if not fc_py:
+        pytest.skip("FCSTD2B123D_FREECAD_PYTHON not set")
+    env = {**os.environ, "PYTHONPATH":
+           os.environ.get("FCSTD2B123D_FREECAD_PYTHONPATH", "") + ":"
+           + str((__import__('pathlib').Path(__file__).parent.parent / "src"))}
+
+    fixtures = [
+        "tests/fixtures/tier2_partdesign/simple_pad.FCStd",
+        "tests/fixtures/tier2_partdesign/pad_with_hole.FCStd",
+        "tests/fixtures/tier2_partdesign/pad_with_ellipse.FCStd",
+    ]
+    for fx in fixtures:
+        vols: dict[str, float] = {}
+        for style in ("algebra", "builder"):
+            translate = subprocess.run(
+                [fc_py, "-m", "fcstd2b123d", "--style", style, fx],
+                capture_output=True, text=True, env=env, check=False,
+            )
+            assert translate.returncode == 0, (
+                f"{style} translate failed on {fx}:\n{translate.stderr}"
+            )
+            exec_out = subprocess.run(
+                [".venv/bin/python", "-c",
+                 translate.stdout + "\nprint('VOL:', result.volume)"],
+                capture_output=True, text=True, check=False,
+            )
+            assert exec_out.returncode == 0, (
+                f"{style} exec failed on {fx}:\n{exec_out.stderr}"
+            )
+            for line in exec_out.stdout.splitlines():
+                if line.startswith("VOL:"):
+                    vols[style] = float(line.split()[1])
+                    break
+        rel_err = abs(vols["algebra"] - vols["builder"]) / max(
+            abs(vols["algebra"]), 1e-9
+        )
+        assert rel_err < 1e-6, (
+            f"{fx}: algebra={vols['algebra']} builder={vols['builder']} "
+            f"(rel.err={rel_err})"
+        )

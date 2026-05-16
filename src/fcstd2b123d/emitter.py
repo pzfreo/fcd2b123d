@@ -345,6 +345,10 @@ _B123D_FUNCTION_IMPORTS = frozenset({
 _PASCAL_RE = re.compile(r"([a-z])([A-Z])")
 _TRAILING_DIGITS_RE = re.compile(r"([a-zA-Z])(\d+)")
 _ASSIGN_TARGET_RE = re.compile(r"^[ \t]*([A-Z][A-Za-z0-9_]*)\s*=", re.MULTILINE)
+# Builder-mode emits ``with BuildSketch() as Sketch001:`` — the ``Sketch001``
+# is a target the post-pass should rename to snake_case alongside regular
+# assignments. Matches ``as <PascalName>`` followed by ``:`` or end of line.
+_AS_TARGET_RE = re.compile(r"\bas\s+([A-Z][A-Za-z0-9_]*)\s*[:\n]", re.MULTILINE)
 
 
 def _snake_case(freecad_name: str) -> str:
@@ -419,6 +423,8 @@ def _snake_case_pass(source: str, label_map: dict[str, str] | None = None) -> st
         m = _ASSIGN_TARGET_RE.match(line)
         if m:
             targets.add(m.group(1))
+        for m in _AS_TARGET_RE.finditer(line):
+            targets.add(m.group(1))
     if not targets:
         return source
 
@@ -433,6 +439,10 @@ def _snake_case_pass(source: str, label_map: dict[str, str] | None = None) -> st
         if m and m.group(1) in targets and m.group(1) not in seen:
             targets_in_order.append(m.group(1))
             seen.add(m.group(1))
+        for m in _AS_TARGET_RE.finditer(line):
+            if m.group(1) in targets and m.group(1) not in seen:
+                targets_in_order.append(m.group(1))
+                seen.add(m.group(1))
     label_map = label_map or {}
     for t in targets_in_order:
         # Three-step name resolution:

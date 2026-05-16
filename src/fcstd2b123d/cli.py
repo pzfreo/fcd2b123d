@@ -43,10 +43,19 @@ def main(argv: list[str] | None = None) -> int:
              "fixtures; requires the consumer to have `fcstd2b123d` "
              "installed at runtime.",
     )
+    parser.add_argument(
+        "--style", choices=["algebra", "builder"], default="algebra",
+        help="Emit style. 'algebra' (default) writes value-style sketch + "
+             "feature constructions (``var = Sketch() + plane * (...)``). "
+             "'builder' wraps sketches in ``with BuildSketch(plane) as var:`` "
+             "blocks (phase 1: sketches only — bodies still use algebra "
+             "emit, referencing the sketch variable normally). Aligns the "
+             "output style with build123d's bd_warehouse library.",
+    )
     args = parser.parse_args(argv)
 
     source, ctx = translate_with_context(
-        args.input, shared_helpers=args.shared_helpers
+        args.input, shared_helpers=args.shared_helpers, style=args.style,
     )
     if args.output is None:
         sys.stdout.write(source)

@@ -105,12 +105,16 @@ Last remaining of the original three; cabin_door + FootPAD addressed
 by the downsampling fix in PR #72. Real geometric difference (99 mm
 vs 72 mm tolerance, bbox 721 mm). Needs feature-by-feature bisection.
 
-### #78 — Opt-in builder-mode emit
+### #78 — Opt-in builder-mode emit (PHASE 1 SHIPPED)
 
-2-3 day alt-style emit. Big visible jump in output quality if landed,
-but #75+#76 already get us most of the way to bd_warehouse style
-without changing the architectural contract. Re-evaluate priority
-after #75/#76 ship — if those close the gap, #78 may slip to v2.
+**Phase 1 (sketches only) landed**: `--style=builder` wraps every
+sketch in `with BuildSketch(plane) as <var>: ...` followed by
+`<var> = <var>.sketch` so downstream Pad/Pocket/etc. still reference
+the variable name unchanged. Algebra-mode remains the default.
+
+**Phase 2 (deferred)**: wrap the body chain in `with BuildPart() as ...`
+contexts using `Mode.SUBTRACT` for boolean cuts. This is the bigger
+restructuring — should be done deliberately, not autonomously.
 
 ### #18 — Isometric render gallery
 
@@ -123,10 +127,10 @@ on the critical path for v1 quality.
 ## Sequencing recommendation
 
 ```
-Sprint 1 (≈1 week):       #75 → #76 → #77
+Sprint 1 (≈1 week):       #75 → #76 → #77 → #78 (phase 1)   ✅ shipped
 Sprint 2 (≈1 week):       #36 → #43
 Sprint 3 (investigation): #38 + #60 (parallel)
-Tier 3 / v2:              #78, #33, #18
+Tier 3 / v2:              #78 (phase 2), #33, #18
 ```
 
 After Sprint 1 the emit quality should pass the "could a human
