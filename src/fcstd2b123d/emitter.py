@@ -182,6 +182,7 @@ def render_module(
     source_path: Path | str,
     parameters: object | None = None,
     doc_description: str | None = None,
+    shared_helpers: bool = False,
 ) -> str:
     """Render translation units into a complete build123d Python module.
 
@@ -192,6 +193,13 @@ def render_module(
     ``Document.Comment`` when set — promoted to the module docstring so
     a renamed file like ``"M5 socket head cap screw, ISO 4762"`` reads
     as documentation rather than an auto-generated path.
+
+    ``shared_helpers``: when True, emit
+    ``from fcstd2b123d.runtime import _edges_at, …`` instead of
+    inlining the helper ``def`` blocks. The runtime module is part
+    of the installed package; this trades self-contained output for
+    a 20-40 line saving per file. Default ``False`` preserves the
+    "open file, no install required" property for one-off translations.
 
     Output is piped through black so emitted source is consistently
     formatted regardless of how individual translators construct strings.
@@ -207,16 +215,21 @@ def render_module(
         helpers.update(u.helpers)
         if u.label and u.label != u.var_name:
             label_map[u.var_name] = u.label
-    # Helpers that need extra build123d names for their type annotations.
-    if "_edges_at" in helpers:
-        imports.add("Edge")
-    if "_faces_at" in helpers:
-        imports.add("Face")
+    # When helpers are inlined, the helper type annotations reference
+    # ``Edge`` / ``Face`` / ``Any`` — pull them into the imports so
+    # the inlined definitions type-check. With ``shared_helpers``, the
+    # helpers live in ``fcstd2b123d.runtime`` and bring their own
+    # annotations; user code only needs the build123d names it
+    # explicitly references.
+    if not shared_helpers:
+        if "_edges_at" in helpers:
+            imports.add("Edge")
+        if "_faces_at" in helpers:
+            imports.add("Face")
     import_line = f"from build123d import {', '.join(sorted(imports))}"
-    # Extra stdlib imports for helper type annotations.
     typing_import_line = (
         "from typing import Any"
-        if ("_edges_at" in helpers or "_faces_at" in helpers)
+        if (not shared_helpers and ("_edges_at" in helpers or "_faces_at" in helpers))
         else ""
     )
 
@@ -228,10 +241,17 @@ def render_module(
         body_lines.append("")
 
     helper_block = ""
+    runtime_import_line = ""
     if helpers:
-        helper_block = "\n\n".join(
-            HELPER_DEFINITIONS[h] for h in sorted(helpers) if h in HELPER_DEFINITIONS
-        ) + "\n\n"
+        helper_names = sorted(h for h in helpers if h in HELPER_DEFINITIONS)
+        if shared_helpers:
+            runtime_import_line = (
+                f"from fcstd2b123d.runtime import {', '.join(helper_names)}"
+            )
+        else:
+            helper_block = "\n\n".join(
+                HELPER_DEFINITIONS[h] for h in helper_names
+            ) + "\n\n"
 
     final_var = units[-1].var_name
 
@@ -247,6 +267,7 @@ def render_module(
         f"{docstring}\n"
         f"{import_line}\n"
         + (f"{typing_import_line}\n" if typing_import_line else "")
+        + (f"{runtime_import_line}\n" if runtime_import_line else "")
         + f"\n"
         + helper_block
         + _assemble_body(body_lines, final_var, used_params)

@@ -115,13 +115,34 @@ def test_partdesign_example_no_solver_noise_digits() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="awaits #77 — `--shared-helpers` CLI flag doesn't exist yet")
 def test_shared_helpers_flag_emits_import_not_inline() -> None:
     """With ``--shared-helpers``, the emit should ``from fcstd2b123d.runtime
     import _edges_at, ...`` rather than inlining the helper definitions."""
-    # _translate currently doesn't support extra CLI args; this test is a
-    # stub for the test that should be added alongside the #77 feature.
-    raise NotImplementedError  # pragma: no cover
+    import os
+    import subprocess
+
+    env = {**os.environ, "PYTHONPATH":
+           os.environ.get("FCSTD2B123D_FREECAD_PYTHONPATH", "") + ":"
+           + str((__import__('pathlib').Path(__file__).parent.parent / "src"))}
+    fc_py = os.environ.get("FCSTD2B123D_FREECAD_PYTHON")
+    if not fc_py:
+        pytest.skip("FCSTD2B123D_FREECAD_PYTHON not set")
+    out = subprocess.run(
+        [
+            fc_py, "-m", "fcstd2b123d", "--shared-helpers",
+            "tests/fixtures/tier3_corpus/ANSI-ASME-B18_2_1_Hex_Head_Cap_Screw_1_4-20x1.FCStd",
+        ],
+        capture_output=True, text=True, env=env, check=False,
+    )
+    assert out.returncode == 0, f"--shared-helpers translation failed:\n{out.stderr}"
+    source = out.stdout
+    assert "from fcstd2b123d.runtime import" in source, (
+        "expected `from fcstd2b123d.runtime import ...` line"
+    )
+    # The inlined `def _edges_at` block should NOT appear when sharing.
+    assert "def _edges_at(" not in source, (
+        "emit still inlines _edges_at — flag had no effect"
+    )
 
 
 # ---------------------------------------------------------------------------
