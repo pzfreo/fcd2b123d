@@ -186,11 +186,15 @@ def _assert_hausdorff(part, pointcloud_path, expected: Properties) -> None:
 
     verts, _faces = part.tessellate(1.0)
     b3d_points = [(float(v.X), float(v.Y), float(v.Z)) for v in verts]
-    # Match the snapshot-side downsampling cap so memory is bounded.
-    cap = 1000
-    if len(b3d_points) > cap:
-        step = len(b3d_points) / cap
-        b3d_points = [b3d_points[int(i * step)] for i in range(cap)]
+    # Do NOT uniform-stride downsample. The FreeCAD-side pointcloud is
+    # already downsampled to 1000 vertices, but those vertices cluster on
+    # feature edges (hole rims, fillet seams) where the BRep needs them.
+    # build123d's ``tessellate`` produces a more uniform distribution; if
+    # we then stride-sample that down to 1000 we lose feature-region
+    # density and the comparison flags false positives (a build123d
+    # tessellation point on a smooth face has no FreeCAD neighbour at
+    # tolerance even though both shapes are identical).
+    # Hausdorff is O(|A|·|B|) memory — at ~10k × 1000 it's ~80 MB, fine.
 
     h = hausdorff_distance(fc_points, b3d_points)
     diag = bbox_diagonal(fc_points)
