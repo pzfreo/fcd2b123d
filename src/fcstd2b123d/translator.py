@@ -83,16 +83,24 @@ def _names_used_as_sweep_spines(doc) -> set[str]:
 def translate_with_context(
     fcstd_path: Path | str,
     shared_helpers: bool = False,
+    style: str = "algebra",
 ) -> tuple[str, TranslationContext]:
     """Translate an .FCStd file. Return (build123d_source, context).
 
-    When ``shared_helpers`` is True, the emit imports helpers from
-    ``fcstd2b123d.runtime`` instead of inlining them — see
-    ``emitter.render_module``.
+    ``shared_helpers``: when True, the emit imports helpers from
+    ``fcstd2b123d.runtime`` instead of inlining them.
+
+    ``style``: ``"algebra"`` (default) emits value-style
+    ``var = Sketch() + plane * (...)`` and ``var = base - extrude(...)``
+    constructions. ``"builder"`` emits builder-mode
+    ``with BuildSketch(plane) as var: ...`` blocks (phase 1: sketches
+    only — Pad / Pocket / etc. continue to use algebra emit, but
+    reference the sketch variable normally because the builder emit
+    rebinds ``var = var.sketch`` after exiting the context).
     """
     path = Path(fcstd_path)
     ctx = TranslationContext(
-        source_path=path, freecad_version=freecad_version()
+        source_path=path, freecad_version=freecad_version(), style=style
     )
     units: list[TranslationUnit] = []
     doc_description: str | None = None
@@ -136,7 +144,13 @@ def translate_with_context(
     return source, ctx
 
 
-def translate(fcstd_path: Path | str, shared_helpers: bool = False) -> str:
+def translate(
+    fcstd_path: Path | str,
+    shared_helpers: bool = False,
+    style: str = "algebra",
+) -> str:
     """Translate an .FCStd file to build123d Python source (compat shim)."""
-    source, _ctx = translate_with_context(fcstd_path, shared_helpers=shared_helpers)
+    source, _ctx = translate_with_context(
+        fcstd_path, shared_helpers=shared_helpers, style=style
+    )
     return source

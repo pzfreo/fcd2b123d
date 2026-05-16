@@ -26,6 +26,10 @@ class TranslationContext:
     # ParameterSet is intentionally typed as Any here to keep this module
     # free of the FreeCAD-aware parametric module's imports.
     parameters: object | None = None
+    # Emit style: "algebra" (default, value-style) or "builder" (with
+    # BuildSketch / BuildPart contexts). Set by the translator from the
+    # CLI's ``--style`` flag; consumed by individual translator functions.
+    style: str = "algebra"
 
     def add_step(
         self,

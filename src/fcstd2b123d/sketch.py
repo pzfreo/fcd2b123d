@@ -464,6 +464,22 @@ def _is_construction(sketch, idx: int) -> bool:
 
 
 def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
+    """Emit the sketch in the style indicated by ``ctx.style``.
+
+    Two flavours:
+      * ``algebra`` (default): ``var = Sketch() + plane * (Circle(r) -
+        make_face(profile))`` — the historical, value-style emit.
+      * ``builder``: ``with BuildSketch(plane) as var: Circle(r);
+        make_face(mode=Mode.SUBTRACT)`` (etc.) followed by
+        ``var = var.sketch`` so downstream extrude / revolve calls
+        can use the same ``var`` name unchanged.
+    """
+    if getattr(ctx, "style", "algebra") == "builder":
+        return _translate_sketch_builder(sketch, ctx)
+    return _translate_sketch_algebra(sketch, ctx)
+
+
+def _translate_sketch_algebra(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
     geometry = [
         (i, g) for i, g in enumerate(sketch.Geometry)
         if not _is_construction(sketch, i)
@@ -623,5 +639,237 @@ def translate_sketch(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
         renamed_from_default=(sketch.Label != sketch.Name),
         build123d_code=unit.lines[0],
         properties=None,  # sketches are 2D — no volume/MOI
+    )
+    return [unit]
+
+
+# ---------------------------------------------------------------------------
+# Builder-mode sketch emit (#78)
+# ---------------------------------------------------------------------------
+
+
+def _emit_circle_builder(g, mode: str | None = None) -> tuple[str, set[str]]:
+    """Render a Circle inside a ``with BuildSketch():`` block.
+
+    Returns either ``Circle(r)`` or ``with Locations((cx, cy)): Circle(r)`` —
+    BuildSketch's algebra-like translation doesn't compose ``Pos`` directly
+    inside the context, so off-origin circles need a Locations wrapper.
+    """
+    cx, cy = g.Center.x, g.Center.y
+    r = g.Radius
+    mode_arg = f", mode=Mode.{mode}" if mode else ""
+    if abs(cx) < _TOL and abs(cy) < _TOL:
+        return f"Circle({_fmt(r)}{mode_arg})", {"Circle"}
+    return (
+        f"with Locations(({_fmt(cx)}, {_fmt(cy)})):\n"
+        f"    Circle({_fmt(r)}{mode_arg})",
+        {"Circle", "Locations"},
+    )
+
+
+def _emit_ellipse_builder(g, mode: str | None = None) -> tuple[str, set[str]]:
+    """Render an Ellipse inside a BuildSketch block, with optional Mode."""
+    cx, cy = g.Center.x, g.Center.y
+    major, minor = g.MajorRadius, g.MinorRadius
+    angle_deg = math.degrees(g.AngleXU)
+    mode_arg = f", mode=Mode.{mode}" if mode else ""
+    if abs(cx) < _TOL and abs(cy) < _TOL and abs(angle_deg) < _TOL:
+        return f"Ellipse({_fmt(major)}, {_fmt(minor)}{mode_arg})", {"Ellipse"}
+    parts = []
+    imports: set[str] = {"Ellipse", "Locations"}
+    if abs(cx) > _TOL or abs(cy) > _TOL:
+        parts.append(f"Locations(({_fmt(cx)}, {_fmt(cy)}))")
+    if abs(angle_deg) > _TOL:
+        parts.append(f"Rot(Z={_fmt(angle_deg)})")
+        imports.add("Rot")
+    # build123d's BuildSketch doesn't compose ``Pos * Rot * Ellipse`` directly;
+    # nest Locations contexts instead. For simplicity at this stage, fall back
+    # to algebra-style placement and rely on make_face semantics.
+    if abs(angle_deg) > _TOL:
+        # Algebra-style placement, kept inside the BuildSketch as a side
+        # construction via the ``add`` mode. Rare path; ellipse-with-angle
+        # in a builder-mode sketch hits this only when the user really did
+        # rotate one. For now, emit a note and fall back to plain Ellipse.
+        return (
+            f"Ellipse({_fmt(major)}, {_fmt(minor)}{mode_arg})  "
+            f"# WARNING: angle={_fmt(angle_deg)}° at ({_fmt(cx)}, {_fmt(cy)}) "
+            f"not applied — builder-mode rotated Ellipse not yet supported",
+            imports,
+        )
+    return (
+        f"with Locations(({_fmt(cx)}, {_fmt(cy)})):\n"
+        f"    Ellipse({_fmt(major)}, {_fmt(minor)}{mode_arg})",
+        imports,
+    )
+
+
+def _translate_sketch_builder(sketch, ctx: TranslationContext) -> list[TranslationUnit]:
+    """Emit a sketch as a ``with BuildSketch(plane) as <var>:`` block.
+
+    Reuses the loop classification (positive vs negative) computed by the
+    algebra-mode path, but writes each loop as a build123d builder-mode
+    construction inside the BuildSketch context, with ``mode=Mode.SUBTRACT``
+    on negatives. After the context exits, rebinds the var to ``var.sketch``
+    so downstream extrude / revolve translators reference the same name as
+    the algebra-mode emit.
+    """
+    geometry = [
+        (i, g) for i, g in enumerate(sketch.Geometry)
+        if not _is_construction(sketch, i)
+    ]
+    unsupported_kinds = {
+        type(g).__name__ for _i, g in geometry
+    } - _SUPPORTED_KINDS
+    if unsupported_kinds:
+        raise UnsupportedFeatureError(
+            sketch.TypeId,
+            f"{sketch.Label} (unsupported geometry kinds: {sorted(unsupported_kinds)})",
+        )
+
+    circles = [g for _i, g in geometry if type(g).__name__ == "Circle"]
+    ellipses = [g for _i, g in geometry if type(g).__name__ == "Ellipse"]
+    chainable = [
+        g for _i, g in geometry
+        if type(g).__name__ in _CHAINABLE_KINDS
+    ]
+    if not circles and not ellipses and not chainable:
+        raise UnsupportedFeatureError(
+            sketch.TypeId, f"{sketch.Label} (empty sketch — no geometry)"
+        )
+
+    edge_loops = _chain_loops(chainable) if chainable else []
+
+    # Same classification as algebra mode: each loop gets area / interior /
+    # containment-test / curve_expr. Then sort by area descending to
+    # determine positive / negative depth.
+    loops: list[dict] = []
+    for chain in edge_loops:
+        curve_expr, imp = _emit_chain_curve(chain)
+        loops.append({
+            "area": _chain_area(chain),
+            "interior": _interior_point_of_chain(chain),
+            "contains": lambda p, c=chain: _chain_contains_point(c, p),
+            "kind": "chain",
+            "curve_expr": curve_expr,
+            "geom": None,
+            "imports": imp,
+        })
+    for c in circles:
+        loops.append({
+            "area": _circle_area(c),
+            "interior": _interior_point_of_circle(c),
+            "contains": lambda p, c=c: _circle_contains_point(c, p),
+            "kind": "circle",
+            "curve_expr": None,
+            "geom": c,
+            "imports": set(),
+        })
+    for e in ellipses:
+        loops.append({
+            "area": _ellipse_area(e),
+            "interior": _interior_point_of_ellipse(e),
+            "contains": lambda p, e=e: _ellipse_contains_point(e, p),
+            "kind": "ellipse",
+            "curve_expr": None,
+            "geom": e,
+            "imports": set(),
+        })
+
+    by_area_desc = sorted(loops, key=lambda L: -L["area"])
+    for i, L in enumerate(by_area_desc):
+        depth = 0
+        for j in range(i):
+            if by_area_desc[j]["contains"](L["interior"]):
+                depth = by_area_desc[j]["depth"] + 1
+                break
+        L["depth"] = depth
+        L["sign"] = +1 if depth % 2 == 0 else -1
+
+    imports: set[str] = {"BuildSketch"}
+    for L in loops:
+        imports.update(L["imports"])
+
+    # No positive loop = degenerate sketch.
+    if not any(L["sign"] > 0 for L in loops):
+        raise UnsupportedFeatureError(
+            sketch.TypeId,
+            f"{sketch.Label} (no top-level positive loop)",
+        )
+
+    # ``Mode`` is only needed when at least one loop is a negative — added
+    # below once we know we'll emit ``mode=Mode.SUBTRACT``.
+    has_subtract = any(L["sign"] < 0 for L in loops)
+    if has_subtract:
+        imports.add("Mode")
+
+    plane = _plane_expr(sketch.Placement)
+    if plane is not None:
+        imports.add("Plane")
+        header = f"with BuildSketch({plane}) as {sketch.Name}:"
+    else:
+        header = f"with BuildSketch() as {sketch.Name}:"
+
+    body_lines: list[str] = []
+    # Emit in source order (positives first, then negatives). Negatives use
+    # Mode.SUBTRACT so they carve into the prior content.
+    ordered = [L for L in loops if L["sign"] > 0] + [L for L in loops if L["sign"] < 0]
+    chain_index = 0
+    for L in ordered:
+        mode = None if L["sign"] > 0 else "SUBTRACT"
+        if L["kind"] == "circle":
+            expr, imp = _emit_circle_builder(L["geom"], mode=mode)
+            imports.update(imp)
+            for line in expr.split("\n"):
+                body_lines.append(f"    {line}")
+        elif L["kind"] == "ellipse":
+            expr, imp = _emit_ellipse_builder(L["geom"], mode=mode)
+            imports.update(imp)
+            for line in expr.split("\n"):
+                body_lines.append(f"    {line}")
+        else:  # chain
+            curve_var = (
+                f"{sketch.Name}_profile" if chain_index == 0
+                and sum(1 for x in loops if x["kind"] == "chain") == 1
+                else f"{sketch.Name}_loop_{chain_index}"
+            )
+            chain_index += 1
+            mode_arg = ", mode=Mode.SUBTRACT" if mode else ""
+            body_lines.append(f"    with BuildLine() as {curve_var}:")
+            body_lines.append(f"        {L['curve_expr']}")
+            body_lines.append(f"    make_face({mode_arg.lstrip(', ')})" if mode_arg
+                              else "    make_face()")
+            imports.add("BuildLine")
+            imports.add("make_face")
+
+    # After the with-block, rebind so downstream code uses ``<var>`` (the
+    # sketch face) rather than ``<var>.sketch``.
+    body_lines.append(f"{sketch.Name} = {sketch.Name}.sketch")
+
+    n_lines = sum(1 for g in sketch.Geometry if type(g).__name__ == "LineSegment")
+    n_arcs = sum(1 for g in sketch.Geometry if type(g).__name__ == "ArcOfCircle")
+    parts = []
+    if n_lines:
+        parts.append(f"{n_lines} line{'s' if n_lines != 1 else ''}")
+    if n_arcs:
+        parts.append(f"{n_arcs} arc{'s' if n_arcs != 1 else ''}")
+    if len(circles):
+        parts.append(f"{len(circles)} circle{'s' if len(circles) != 1 else ''}")
+    if len(ellipses):
+        parts.append(f"{len(ellipses)} ellipse{'s' if len(ellipses) != 1 else ''}")
+    summary = ", ".join(parts)
+
+    unit = TranslationUnit(
+        var_name=sketch.Name,
+        label=sketch.Label,
+        imports=imports,
+        lines=[header, *body_lines],
+        comment=f"Sketcher::SketchObject {sketch.Label!r}: {summary} ({len(loops)} loops)",
+    )
+    ctx.add_step(
+        feature_type="sketch",
+        feature_name=sketch.Name,
+        renamed_from_default=(sketch.Label != sketch.Name),
+        build123d_code="\n".join(unit.lines),
+        properties=None,
     )
     return [unit]
