@@ -18,10 +18,12 @@ from __future__ import annotations
 from tests.test_translator_corpus import EXCLUDED_FROM_TEST, FIXTURE_DIRS
 
 
-# Floor as of PR #82 (autonomous runway). Should grow over time as
-# issues close and fixtures move from EXCLUDED back to passing — never
-# shrink without a justified update to this constant.
-EXPECTED_MIN_RUNNING_COUNT = 171
+# Floor ratchets up as the corpus grows. Adding the seed-2026 sample
+# (PR-pending) added 65 new running fixtures from the 100-file audit,
+# bringing the total to 237. Should grow over time as issues close and
+# fixtures move from EXCLUDED back to passing — never shrink without
+# a justified update to this constant.
+EXPECTED_MIN_RUNNING_COUNT = 237
 
 
 def test_corpus_unexcluded_count_floor() -> None:

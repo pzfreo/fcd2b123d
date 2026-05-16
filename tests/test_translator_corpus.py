@@ -25,6 +25,7 @@ FIXTURE_DIRS = [
     Path("tests/fixtures/tier6_corpus"),    # seed 519 — parametric (Spreadsheet)
     Path("tests/fixtures/tier4_corpus"),    # seed 613 — uses LinearPattern/PolarPattern/Mirrored
     Path("tests/fixtures/sample_813"),      # seed 813 — true-random 100-file library audit
+    Path("tests/fixtures/sample_2026"),     # seed 2026 — true-random 100-file library audit
 ]
 
 # Fixtures whose translation reveals real v1 scope limitations. They stay in
@@ -122,6 +123,44 @@ EXCLUDED_FROM_TEST = {
     "ANSI-ASME-B18_2_2_Hex_Nut_1_4-20",         # ~7000 ppm volume drift in chamfer-edge selection (#57 precision-edge)
     "FootPAD",                                  # Hausdorff 8.56 / tol 5.43 (bbox 54mm); #60 — real but unidentified
     "WallHungBidet",                            # Hausdorff 99 / tol 72 (bbox 721mm); #60 — real geometric difference
+    # sample_2026 (seed-2026 random library audit): 69/100 pass; the
+    # following 28 are excluded with their current best-known root cause.
+    #
+    # Part::Part2DObjectPython (sprocket Teeth sketches) — out of scope per
+    # closed #53 / SPEC §13.5:
+    "Sprocket_ANSI_duplex__x_",
+    "Sprocket_ANSI_simplex__x__z23",
+    "Sprocket_ANSI_simplex__x__z38",
+    "Sprocket_ANSI_simplex__x_____z22",
+    "Sprocket_ANSI_simplex__x_____z31",
+    "Sprocket_ANSI_simplex__x_____z36",
+    "Sprocket_ANSI_simplex__x_____z57",
+    "Sprocket_ANSI_simplex_2x1__z17",
+    # Part::FeaturePython (generic scripted features) — out of scope per
+    # SPEC §13.5 ("do it properly or not at all"; no parametric mapping):
+    "GT2Pulley-V2",                             # Part::FeaturePython 'Array'
+    "Button_Proudly_made_by_a_Maker",           # Part::FeaturePython 'button_holes'
+    "6_frame_modules",                          # Part::FeaturePython '6 frame modules'
+    "parametric_axial_bearing",                 # Part::FeaturePython 'Cylinders'
+    # Part::Feature (shape-only concrete-geometry wrappers) — out of scope
+    # per SPEC §13.5 (would have required the banned shape-import path):
+    "Insert_GND",                               # Part::Feature 'E'
+    "2x18-female-pin-header",                   # Part::Feature 'female-pins'
+    "blower-50x50mm",                           # Part::Feature 'TFD-B5015 TITAN'
+    "TO92_3_81",                                # Part::Feature 'body'
+    "Man01",                                    # Part::Feature 'People007' (mannequin)
+    "Man06",                                    # Part::Feature 'People005' (mannequin)
+    # Newly-filed translator gaps with reproducer-pinned issues:
+    "2x5-pin-box-header-male-right-angle",      # Part::Chamfer top-level (#92)
+    "Chamfered_rectangular_bend",               # Part::Thickness (#93)
+    "DN15_FIG_130",                             # Part::Thickness (#93)
+    "3pin-female-2_54mm-connector",             # atomic Pocket UpToFirst (#94)
+    "Generic_siphon",                           # Revolution ReferenceAxis='DatumLine' (#95)
+    # Pre-existing translator limits surfaced again by this sample:
+    "IgnusNutMount",                            # Fillet R=3 exceeds build123d/OCCT capability on B-spline edges (#36)
+    "T8_leadscrew_150mm",                       # Part::Helix-bearing leadscrew exceeds 30s translator timeout (#33)
+    "Nema-17_Mount_Bracket",                    # Sketcher: spoke-line geometry doesn't form a closed loop (pre-existing chain-detector limit)
+    "MK8",                                      # Part::Compound is empty — tooling edge case
 }
 
 FIXTURES = sorted(

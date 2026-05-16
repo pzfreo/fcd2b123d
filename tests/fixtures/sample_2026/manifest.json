@@ -1,0 +1,1382 @@
+[
+  {
+    "source_path": "Mechanical Parts/Pulleys/GT2Pulley-V2.fcstd",
+    "fixture_stem": "GT2Pulley-V2",
+    "snapshot_time_s": 1.4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.5,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::FeaturePython' (object 'Array'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M8x160 ISO4762 8,8 A2K.FCStd",
+    "status": "cached_pass",
+    "cached_fixture": "tier3_corpus_c/Screw_M8x160_ISO4762_8_8_A2K"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10059 Square steel bars/Square Bar 220 EN10059 S235JR.FCStd",
+    "fixture_stem": "Square_Bar_220_EN10059_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 5.6,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/DIN1025-3 HE-A-Profiles/HE-A-Profile 700 DIN1025-3 S235JR.FCStd",
+    "fixture_stem": "HE-A-Profile_700_DIN1025-3_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.8,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Electronics Parts/Connectors/female/3pin-female-2.54mm-connector.fcstd",
+    "fixture_stem": "3pin-female-2_54mm-connector",
+    "snapshot_time_s": 1.3,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.3,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'PartDesign::Pocket' (object \"bottom-pins-cutout (atomic Pocket.Type='UpToFirst'; tier-2 atomic Pocket only supports 'Length' and 'ThroughAll')\"). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex \u215cx\u2077\u2044\u2083\u2082/Sprocket ANSI simplex \u215cx\u2077\u2044\u2083\u2082 z22.FCStd",
+    "fixture_stem": "Sprocket_ANSI_simplex__x_____z22",
+    "snapshot_time_s": 8.9,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 7.6,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Part2DObjectPython' (object 'Teeth sketch (feature kind not supported in tier 2/3; only Sketch / Pad / Pocket / Revolution / Groove / Fillet / Chamfer)'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Metric/Normal/M3/M3NormalMean.FCStd",
+    "fixture_stem": "M3NormalMean",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.8,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10060 Round steel bars/Round Bar 190 EN10060 S235JR.FCStd",
+    "fixture_stem": "Round_Bar_190_EN10060_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.0,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Logistics/Shipping Containers/20_Feet_ISO_Container/front-member_vertical-2_mir.FCStd",
+    "fixture_stem": "front-member_vertical-2_mir",
+    "snapshot_time_s": 1.3,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 2.2,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Rectangular Hollow Sections/Rectangular hollow section 180x100x5 EN10219 S235JRH.FCStd",
+    "fixture_stem": "Rectangular_hollow_section_180x100x5_EN10219_S235JRH",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.1,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10058 Flat steel bars/Flat Bar 80x5 EN10058 S235JR.FCStd",
+    "fixture_stem": "Flat_Bar_80x5_EN10058_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.0,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Rectangular Hollow Sections/Rectangular hollow section 260x180x12 EN10219 S235JRH.FCStd",
+    "fixture_stem": "Rectangular_hollow_section_260x180x12_EN10219_S235JRH",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/DIN1025-2 HE-B-Profiles/HE-B-Profile 320 DIN1025-2 S235JR.FCStd",
+    "fixture_stem": "HE-B-Profile_320_DIN1025-2_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Electrical Parts/Hotend/MK8.FCStd",
+    "fixture_stem": "MK8",
+    "snapshot_time_s": 2.0,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.8,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Compound' (object 'extruder-motor (empty Compound)'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "DummiesAndSculptures/Mannequin_mp/Mannequin_mp-dummy-1850mm-standing-007.FCStd",
+    "status": "cached_excluded",
+    "cached_fixture": "tier3_corpus_b/Mannequin_mp-dummy-1850mm-standing-007"
+  },
+  {
+    "source_path": "Generic objects/Button_Proudly_made_by_a_Maker.fcstd",
+    "fixture_stem": "Button_Proudly_made_by_a_Maker",
+    "snapshot_time_s": 4.8,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 2.4,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::FeaturePython' (object 'button_holes'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Square Hollow Sections/Square hollow section 40x40x3.6 EN10219 S235JRH.FCStd",
+    "fixture_stem": "Square_hollow_section_40x40x3_6_EN10219_S235JRH",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.1,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Pipes and tubes/Generic siphon.FCStd",
+    "fixture_stem": "Generic_siphon",
+    "snapshot_time_s": 0.8,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.7,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'PartDesign::Revolution' (object \"Revolution001 (ReferenceAxis='DatumLine'/'DatumLine' not supported in tier-2)\"). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Medical Parts/01 Biomedical/OpenLung/Parts/IgnusNutMount.FCStd",
+    "fixture_stem": "IgnusNutMount",
+    "snapshot_time_s": 2.3,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 7.0,
+    "translate": {
+      "status": "exec_error",
+      "error": "ValueError: Failed creating a fillet with radius of 3, try a smaller value or use max_fillet() to find the largest valid fillet radius",
+      "traceback": [
+        "  File \"/app/workspaces/pzfreo/fcd2b123d/.venv/lib/python3.12/site-packages/build123d/topology/three_d.py\", line 349, in fillet",
+        "    raise ValueError(",
+        "ValueError: Failed creating a fillet with radius of 3, try a smaller value or use max_fillet() to find the largest valid fillet radius"
+      ]
+    },
+    "status": "exec_error"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Rectangular Hollow Sections/Rectangular hollow section 200x120x12.5 EN10219 S235JRH.FCStd",
+    "fixture_stem": "Rectangular_hollow_section_200x120x12_5_EN10219_S235JRH",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10058 Flat steel bars/Flat Bar 150x40 EN10058 S235JR.FCStd",
+    "fixture_stem": "Flat_Bar_150x40_EN10058_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Metric/Close/M64/M64CloseMax.FCStd",
+    "fixture_stem": "M64CloseMax",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "HVAC/Ducts/Rectangular/Conections/Chamfered_rectangular_bend.FCStd",
+    "fixture_stem": "Chamfered_rectangular_bend",
+    "snapshot_time_s": 1.4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.3,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Thickness' (object '1.1-Chamfered_rectangular_bend_SHEET_THICKNESS'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Enclosures/HJC_040/Insert_GND.FCStd",
+    "fixture_stem": "Insert_GND",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.7,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Feature' (object 'E'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Duplex \u215dx\u215c/Sprocket ANSI duplex \u215dx\u215c.FCStd",
+    "fixture_stem": "Sprocket_ANSI_duplex__x_",
+    "snapshot_time_s": 5.4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 5.0,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Part2DObjectPython' (object 'Teeth sketch (feature kind not supported in tier 2/3; only Sketch / Pad / Pocket / Revolution / Groove / Fillet / Chamfer)'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex 8x3,0/Sprocket ISO606 simplex 8x3,0 z57.FCStd",
+    "fixture_stem": "Sprocket_ISO606_simplex_8x3_0_z57",
+    "snapshot_time_s": 90.2,
+    "snapshot": {
+      "status": "timeout",
+      "error": "snapshot exceeded 90s"
+    },
+    "status": "snapshot_timeout"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M10x70 ISO4762 8,8 A2K.FCStd",
+    "fixture_stem": "Screw_M10x70_ISO4762_8_8_A2K",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex \u215cx\u2077\u2044\u2083\u2082/Sprocket ANSI simplex \u215cx\u2077\u2044\u2083\u2082 z31.FCStd",
+    "fixture_stem": "Sprocket_ANSI_simplex__x_____z31",
+    "snapshot_time_s": 10.3,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 10.1,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Part2DObjectPython' (object 'Teeth sketch (feature kind not supported in tier 2/3; only Sketch / Pad / Pocket / Revolution / Groove / Fillet / Chamfer)'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10058 Flat steel bars/Flat Bar 25x20 EN10058 S235JR.FCStd",
+    "fixture_stem": "Flat_Bar_25x20_EN10058_S235JR",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.0,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex 6x2,8/Sprocket ISO606 simplex 6x2,8 z26.FCStd",
+    "fixture_stem": "Sprocket_ISO606_simplex_6x2_8_z26",
+    "snapshot_time_s": 15.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 47.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Electronics Parts/Headers/2.54mm-pitch/female/2x18-female-pin-header.fcstd",
+    "fixture_stem": "2x18-female-pin-header",
+    "snapshot_time_s": 3.1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 2.2,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Feature' (object 'female-pins'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Square Hollow Sections/Square hollow section 350x350x8 EN10219 S235JRH.FCStd",
+    "fixture_stem": "Square_hollow_section_350x350x8_EN10219_S235JRH",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.2,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Electronics Parts/Headers/2.54mm-pitch/male/box/2x5-pin-box-header-male-right-angle.fcstd",
+    "fixture_stem": "2x5-pin-box-header-male-right-angle",
+    "snapshot_time_s": 1.9,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.7,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Chamfer' (object 'Chamfer'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M12x240 ISO4762 8,8 A2K.FCStd",
+    "fixture_stem": "Screw_M12x240_ISO4762_8_8_A2K",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.0,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Unified/Loose/U_Number_4/U_Number_4LooseMin.FCStd",
+    "fixture_stem": "U_Number_4LooseMin",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10056 Unequal Angle Bars/Angle Bar 130x90x10 EN10056 S235JR.FCStd",
+    "fixture_stem": "Angle_Bar_130x90x10_EN10056_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.1,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Metric/Close/M4/M4CloseMax.FCStd",
+    "fixture_stem": "M4CloseMax",
+    "snapshot_time_s": 0.5,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M10x180 ISO4762 8,8 A2K.FCStd",
+    "fixture_stem": "Screw_M10x180_ISO4762_8_8_A2K",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.0,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M4x110 ISO4762 8,8 A2K.FCStd",
+    "fixture_stem": "Screw_M4x110_ISO4762_8_8_A2K",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.2,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M2x8 ISO4762 8,8 A2K.FCStd",
+    "fixture_stem": "Screw_M2x8_ISO4762_8_8_A2K",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.1,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Electrical Parts/fans/blower-50x50mm.fcstd",
+    "fixture_stem": "blower-50x50mm",
+    "snapshot_time_s": 1.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.2,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Feature' (object 'TFD-B5015 TITAN'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/DIN1025-3 HE-A-Profiles/HE-A-Profile 260 DIN1025-3 S235JR.FCStd",
+    "fixture_stem": "HE-A-Profile_260_DIN1025-3_S235JR",
+    "snapshot_time_s": 0.8,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.0,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Electronics Parts/Semiconductors/TO92_3.81.FCStd",
+    "fixture_stem": "TO92_3_81",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.4,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Feature' (object 'body'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex \u00bex\u2077\u2044\u2081\u2086/Sprocket ANSI simplex \u00bex\u2077\u2044\u2081\u2086 z10.FCStd",
+    "fixture_stem": "Sprocket_ANSI_simplex__x_____z10",
+    "snapshot_time_s": 4.4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 3.6,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Part2DObjectPython' (object 'Teeth sketch (feature kind not supported in tier 2/3; only Sketch / Pad / Pocket / Revolution / Groove / Fillet / Chamfer)'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Industrial Design/Tables/ComputerDesk (100 x 50 x 75 cm WDH).FCStd",
+    "fixture_stem": "ComputerDesk__100_x_50_x_75_cm_WDH_",
+    "snapshot_time_s": 0.8,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.2,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M20x85 ISO4762 8,8 A2K.FCStd",
+    "status": "cached_pass",
+    "cached_fixture": "tier3_corpus_b/Screw_M20x85_ISO4762_8_8_A2K"
+  },
+  {
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex \u00bdx\u215b/Sprocket ANSI simplex \u00bdx\u215b z38.FCStd",
+    "fixture_stem": "Sprocket_ANSI_simplex__x__z38",
+    "snapshot_time_s": 14.1,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 12.9,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Part2DObjectPython' (object 'Teeth sketch (feature kind not supported in tier 2/3; only Sketch / Pad / Pocket / Revolution / Groove / Fillet / Chamfer)'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Rectangular Hollow Sections/Rectangular hollow section 120x80x8 EN10219 S235JRH.FCStd",
+    "fixture_stem": "Rectangular_hollow_section_120x80x8_EN10219_S235JRH",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.1,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/DIN1025-4 HE-M-Profiles/HE-M-Profile 200 DIN1025-4 S235JR.FCStd",
+    "fixture_stem": "HE-M-Profile_200_DIN1025-4_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M6x40 ISO4762 8,8 A2K.FCStd",
+    "fixture_stem": "Screw_M6x40_ISO4762_8_8_A2K",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.1,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M10x300 ISO4762 8,8 A2K.FCStd",
+    "fixture_stem": "Screw_M10x300_ISO4762_8_8_A2K",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.1,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10058 Flat steel bars/Flat Bar 110x25 EN10058 S235JR.FCStd",
+    "fixture_stem": "Flat_Bar_110x25_EN10058_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Washers/Metric/DIN463_M14TabWasher.fcstd",
+    "fixture_stem": "DIN463_M14TabWasher",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.1,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Electronics Parts/Connectors/power-connectors/housing-2-54mm-2p.fcstd",
+    "fixture_stem": "housing-2-54mm-2p",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.5,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Architectural Parts/Symbols/People symbols/Man01.FCStd",
+    "fixture_stem": "Man01",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.5,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Feature' (object 'People007'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Architectural Parts/Construction blocks/Canal block.FCStd",
+    "status": "cached_pass",
+    "cached_fixture": "tier6_corpus/Canal_block"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Rectangular Hollow Sections/Rectangular hollow section 200x120x6.3 EN10219 S235JRH.FCStd",
+    "fixture_stem": "Rectangular_hollow_section_200x120x6_3_EN10219_S235JRH",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.1,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M5x170 ISO4762 8,8 A2K.FCStd",
+    "fixture_stem": "Screw_M5x170_ISO4762_8_8_A2K",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.0,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex \u00bdx\u2075\u2044\u2081\u2086/Sprocket ANSI simplex \u00bdx\u2075\u2044\u2081\u2086 z57.FCStd",
+    "fixture_stem": "Sprocket_ANSI_simplex__x_____z57",
+    "snapshot_time_s": 24.9,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 22.8,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Part2DObjectPython' (object 'Teeth sketch (feature kind not supported in tier 2/3; only Sketch / Pad / Pocket / Revolution / Groove / Fillet / Chamfer)'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Architectural Parts/Windows/Glass-skin/6 frame modules.FCStd",
+    "fixture_stem": "6_frame_modules",
+    "snapshot_time_s": 2.5,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 2.2,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::FeaturePython' (object '6 frame modules'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M5x140 ISO4762 8,8 A2K.FCStd",
+    "fixture_stem": "Screw_M5x140_ISO4762_8_8_A2K",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolts & Screws/Metric/ISO4762 Hexagon socket head cap screws/Screw M16x240 ISO4762 8,8 A2K.FCStd",
+    "fixture_stem": "Screw_M16x240_ISO4762_8_8_A2K",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Square Hollow Sections/Square hollow section 400x400x16 EN10219 S235JRH.FCStd",
+    "fixture_stem": "Square_hollow_section_400x400x16_EN10219_S235JRH",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.0,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10058 Flat steel bars/Flat Bar 70x5 EN10058 S235JR.FCStd",
+    "fixture_stem": "Flat_Bar_70x5_EN10058_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex \u00bdx\u215b/Sprocket ANSI simplex \u00bdx\u215b z23.FCStd",
+    "fixture_stem": "Sprocket_ANSI_simplex__x__z23",
+    "snapshot_time_s": 9.0,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 7.9,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Part2DObjectPython' (object 'Teeth sketch (feature kind not supported in tier 2/3; only Sketch / Pad / Pocket / Revolution / Groove / Fillet / Chamfer)'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10056 Unequal Angle Bars/Angle Bar 45x30x3 EN10056 S235JR.FCStd",
+    "fixture_stem": "Angle_Bar_45x30x3_EN10056_S235JR",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Rectangular Hollow Sections/Rectangular hollow section 250 x150x6.3 EN10219 S235JRH.FCStd",
+    "fixture_stem": "Rectangular_hollow_section_250_x150x6_3_EN10219_S235JRH",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.1,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Rectangular Hollow Sections/Rectangular hollow section 500x300x20 EN10219 S235JRH.FCStd",
+    "status": "cached_pass",
+    "cached_fixture": "sample_813/Rectangular_hollow_section_500x300x20_EN10219_S235JRH"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10059 Square steel bars/Square Bar 50 EN10059 S235JR.FCStd",
+    "fixture_stem": "Square_Bar_50_EN10059_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex 8x3,0/Sprocket ISO606 simplex 8x3,0 z15.FCStd",
+    "fixture_stem": "Sprocket_ISO606_simplex_8x3_0_z15",
+    "snapshot_time_s": 7.2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 21.5,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10058 Flat steel bars/Flat Bar 70x30 EN10058 S235JR.FCStd",
+    "fixture_stem": "Flat_Bar_70x30_EN10058_S235JR",
+    "snapshot_time_s": 0.5,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.7,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/DIN1026-2 UPE-Profiles/UPE-Profile 120 DIN1026-2 S235JR.FCStd",
+    "fixture_stem": "UPE-Profile_120_DIN1026-2_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.0,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Pipes and tubes/DN15_FIG_130.FCStd",
+    "fixture_stem": "DN15_FIG_130",
+    "snapshot_time_s": 1.2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.2,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Thickness' (object 'Thickness'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10060 Round steel bars/Round Bar 110 EN10060 S235JR.FCStd",
+    "fixture_stem": "Round_Bar_110_EN10060_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.8,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Square Hollow Sections/Square hollow section 60x60x3 EN10219 S235JRH.FCStd",
+    "fixture_stem": "Square_hollow_section_60x60x3_EN10219_S235JRH",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.0,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10056 Unequal Angle Bars/Angle Bar 70x50x5 EN10056 S235JR.FCStd",
+    "fixture_stem": "Angle_Bar_70x50x5_EN10056_S235JR",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.1,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10056 Equal Angle Bars/Angle Bar L70x70x7 EN10056 S235JR.FCStd",
+    "fixture_stem": "Angle_Bar_L70x70x7_EN10056_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.0,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Metric/Loose/M3/M3LooseMean.FCStd",
+    "fixture_stem": "M3LooseMean",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.0,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10058 Flat steel bars/Flat Bar 60x4 EN10058 S235JR.FCStd",
+    "fixture_stem": "Flat_Bar_60x4_EN10058_S235JR",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Rectangular Hollow Sections/Rectangular hollow section 300x200x6.3 EN10219 S235JRH.FCStd",
+    "fixture_stem": "Rectangular_hollow_section_300x200x6_3_EN10219_S235JRH",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.1,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Square Hollow Sections/Square hollow section 100x100x6.3 EN10219 S235JRH.FCStd",
+    "fixture_stem": "Square_hollow_section_100x100x6_3_EN10219_S235JRH",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.2,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/DIN1025-3 HE-A-Profiles/HE-A-Profile 550 DIN1025-3 S235JR.FCStd",
+    "fixture_stem": "HE-A-Profile_550_DIN1025-3_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.0,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10056 Equal Angle Bars/Angle Bar L35x35x3 EN10056 S235JR.FCStd",
+    "fixture_stem": "Angle_Bar_L35x35x3_EN10056_S235JR",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex \u00bdx\u2075\u2044\u2081\u2086/Sprocket ANSI simplex \u00bdx\u2075\u2044\u2081\u2086 z36.FCStd",
+    "fixture_stem": "Sprocket_ANSI_simplex__x_____z36",
+    "snapshot_time_s": 14.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 13.7,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Part2DObjectPython' (object 'Teeth sketch (feature kind not supported in tier 2/3; only Sketch / Pad / Pocket / Revolution / Groove / Fillet / Chamfer)'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Rectangular Hollow Sections/Rectangular hollow section 250x150x5 EN10219 S235JRH.FCStd",
+    "fixture_stem": "Rectangular_hollow_section_250x150x5_EN10219_S235JRH",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.1,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Metric/Normal/M48/M48NormalMean.FCStd",
+    "fixture_stem": "M48NormalMean",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Generic objects/Foundation/Caisson.FCStd",
+    "fixture_stem": "Caisson",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Mountings/T8_leadscrew/T8_leadscrew_150mm.FCStd",
+    "fixture_stem": "T8_leadscrew_150mm",
+    "snapshot_time_s": 42.2,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 30.1,
+    "translate": {
+      "status": "translator_timeout",
+      "error": ">30s"
+    },
+    "status": "translator_timeout"
+  },
+  {
+    "source_path": "Mechanical Parts/Chains/Sprocket/ISO 606/Simplex 2x1\u00bc/Sprocket ANSI simplex 2x1\u00bc z17.FCStd",
+    "fixture_stem": "Sprocket_ANSI_simplex_2x1__z17",
+    "snapshot_time_s": 10.3,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 9.6,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Part2DObjectPython' (object 'Teeth sketch (feature kind not supported in tier 2/3; only Sketch / Pad / Pocket / Revolution / Groove / Fillet / Chamfer)'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Architectural Parts/Symbols/People symbols/Man06.FCStd",
+    "fixture_stem": "Man06",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.5,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::Feature' (object 'People005'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10056 Equal Angle Bars/Angle Bar L140x140x10 EN10056 S235JR.FCStd",
+    "fixture_stem": "Angle_Bar_L140x140x10_EN10056_S235JR",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.0,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Electronics Parts/Motors/Stepper/NEMA/Nema-17_Mount_Bracket/Nema-17_Mount_Bracket.fcstd",
+    "fixture_stem": "Nema-17_Mount_Bracket",
+    "snapshot_time_s": 1.4,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.3,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Sketcher::SketchObject' (object '(open or disconnected geometry \u2014 no edge connects to (-25.000, 50.000))'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  },
+  {
+    "source_path": "Architectural Parts/Kitchen/Kitchen_cabinet_sink.FCStd",
+    "fixture_stem": "Kitchen_cabinet_sink",
+    "snapshot_time_s": 1.8,
+    "snapshot": {
+      "status": "fail",
+      "error": "RuntimeError: Compound contains no solids"
+    },
+    "status": "snapshot_fail"
+  },
+  {
+    "source_path": "Logistics/Shipping Containers/20_Feet_ISO_Container/front-member_vertical.FCStd",
+    "fixture_stem": "front-member_vertical",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.1,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10058 Flat steel bars/Flat Bar 70x50 EN10058 S235JR.FCStd",
+    "fixture_stem": "Flat_Bar_70x50_EN10058_S235JR",
+    "snapshot_time_s": 0.6,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Square Hollow Sections/Square hollow section 200x200x12 EN10219 S235JRH.FCStd",
+    "fixture_stem": "Square_hollow_section_200x200x12_EN10219_S235JRH",
+    "snapshot_time_s": 0.8,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.1,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Washers/Metric/ISO7091DIN126_CLASS_C_M18FlatWasher.fcstd",
+    "fixture_stem": "ISO7091DIN126_CLASS_C_M18FlatWasher",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 0.9,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Profiles EN/EN10219 Square Hollow Sections/Square hollow section 250x250x16 EN10219 S235JRH.FCStd",
+    "fixture_stem": "Square_hollow_section_250x250x16_EN10219_S235JRH",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.2,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Fasteners/Bolt Clearance Hole Cylinders/Metric/Normal/M8/M8NormalMax.FCStd",
+    "fixture_stem": "M8NormalMax",
+    "snapshot_time_s": 0.7,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.0,
+    "translate": {
+      "status": "pass"
+    },
+    "status": "pass"
+  },
+  {
+    "source_path": "Mechanical Parts/Bearings/parametric_axial_bearing/parametric_axial_bearing.fcstd",
+    "fixture_stem": "parametric_axial_bearing",
+    "snapshot_time_s": 1.3,
+    "snapshot": {
+      "status": "ok",
+      "cached": false
+    },
+    "translate_time_s": 1.4,
+    "translate": {
+      "status": "unsupported",
+      "error": "fcstd2b123d.errors.UnsupportedFeatureError: No translator for FreeCAD type 'Part::FeaturePython' (object 'Cylinders'). This may be a feature outside v1's tier-supported set, or a gap in the tier map \u2014 see SPEC \u00a713.4."
+    },
+    "status": "unsupported"
+  }
+]
