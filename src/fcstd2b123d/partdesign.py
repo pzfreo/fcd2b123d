@@ -1408,6 +1408,12 @@ def _translate_pattern(
     imports = set(prism_imports)
     helpers: set[str] = set()
     extra_terms: list[str] = []
+    # When a uniform single-Original pattern can be expressed as
+    # ``Locations(...) * prism`` (single algebra-mode term), we use that
+    # form instead of the helper chain — see ``locations_expr``. Falls
+    # back to ``extra_terms`` + helper when the pattern is multi-Original
+    # or has a structure Locations can't compactly express.
+    locations_expr: str | None = None
 
     if tid == "PartDesign::LinearPattern":
         occurrences = int(getattr(pat, "Occurrences", 1))
@@ -1419,12 +1425,28 @@ def _translate_pattern(
         offset = _linear_step(pat, occurrences)
         if bool(getattr(pat, "Reversed", False)):
             offset = -offset
-        for i in range(1, occurrences):
-            step = i * offset
-            loc = _location_for_linear(direction, step)
-            for prism_expr in prism_exprs:
-                extra_terms.append(f"{loc} * {prism_expr}")
-        imports.add("Pos")
+        # Single-Original uniform linear pattern → emit
+        # ``Locations((dx, dy, dz), (2dx, 2dy, 2dz), ...) * prism``. The
+        # current_var already contains the i=0 copy; the Locations
+        # provides i=1..N-1.
+        if len(prism_exprs) == 1 and occurrences > 1:
+            positions = []
+            for i in range(1, occurrences):
+                step = i * offset
+                positions.append(
+                    f"({format_value(direction[0] * step)}, "
+                    f"{format_value(direction[1] * step)}, "
+                    f"{format_value(direction[2] * step)})"
+                )
+            locations_expr = f"Locations({', '.join(positions)}) * {prism_exprs[0]}"
+            imports.add("Locations")
+        else:
+            for i in range(1, occurrences):
+                step = i * offset
+                loc = _location_for_linear(direction, step)
+                for prism_expr in prism_exprs:
+                    extra_terms.append(f"{loc} * {prism_expr}")
+            imports.add("Pos")
         note = (
             f"LinearPattern along ({direction[0]:g}, {direction[1]:g}, {direction[2]:g}), "
             f"step={offset}, occurrences={occurrences}"
@@ -1441,12 +1463,42 @@ def _translate_pattern(
         offset = _polar_step(pat, occurrences)
         if bool(getattr(pat, "Reversed", False)):
             offset = -offset
-        for i in range(1, occurrences):
-            angle = i * offset
-            rot = _rotation_for_polar(direction, angle)
-            for prism_expr in prism_exprs:
-                extra_terms.append(f"{rot} * {prism_expr}")
-        imports.add("Rot")
+        # Single-Original uniform polar pattern about +Z → emit
+        # ``PolarLocations(0, N-1, start_angle=step, angular_range=(N-1)*step) * prism``.
+        # PolarLocations(0, k) rotates each copy about the origin by
+        # start_angle + i·(range/(k-1)); a shape already off-axis is
+        # rotated to k angular positions. The body's current_var holds
+        # the i=0 copy; Locations provides i=1..N-1.
+        # Restricted to +Z-axis patterns (the overwhelming common case
+        # in the library); arbitrary-axis polar falls back to the
+        # explicit-term form.
+        is_z_axis = (
+            abs(direction[0]) < 1e-9
+            and abs(direction[1]) < 1e-9
+            and abs(direction[2] - 1) < 1e-6
+        )
+        if len(prism_exprs) == 1 and occurrences > 1 and is_z_axis:
+            extra_count = occurrences - 1
+            # build123d's PolarLocations(0, n, start, range) spaces n
+            # copies at start + i·(range/n) for i=0..n-1 (NOT range/(n-1)
+            # — the spacing-by-count formula avoids wrap when range=360).
+            # To produce copies at angles k·offset for k=1..N-1, set
+            # angular_range = extra_count * offset so spacing = offset.
+            angular_range = extra_count * offset
+            locations_expr = (
+                f"PolarLocations(0, {extra_count}, "
+                f"start_angle={format_value(offset)}, "
+                f"angular_range={format_value(angular_range)}) "
+                f"* {prism_exprs[0]}"
+            )
+            imports.add("PolarLocations")
+        else:
+            for i in range(1, occurrences):
+                angle = i * offset
+                rot = _rotation_for_polar(direction, angle)
+                for prism_expr in prism_exprs:
+                    extra_terms.append(f"{rot} * {prism_expr}")
+            imports.add("Rot")
         note = (
             f"PolarPattern around ({direction[0]:g}, {direction[1]:g}, {direction[2]:g}), "
             f"step={offset}deg, occurrences={occurrences}"
@@ -1464,7 +1516,11 @@ def _translate_pattern(
             + (f", {len(originals)} originals" if len(originals) > 1 else "")
         )
 
-    if not extra_terms:
+    if locations_expr is not None:
+        # Single-Original uniform pattern: one-liner via Locations.
+        op = "+" if sign == "+" else "-"
+        line = f"{pat.Name} = {current_var} {op} {locations_expr}"
+    elif not extra_terms:
         # No additional copies — occurrences=1 — pattern is a no-op.
         # Emit a trivial assignment so downstream features see the new name.
         line = f"{pat.Name} = {current_var}"

@@ -29,28 +29,42 @@ from tests.test_translator_tier1 import _translate
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="tracks #75 — pattern emit not yet refactored to Locations contexts")
 def test_polar_pattern_uses_polar_locations() -> None:
-    """A 6-fold uniform polar pattern should emit ONE ``with PolarLocations(``
-    block, not six chained ``Rot(Z=k·60) * ...`` terms."""
+    """A 6-fold uniform polar pattern should emit ONE ``PolarLocations(``
+    term (algebra-mode multiplier), not six chained ``Rot(Z=k·60) * ...``
+    terms.
+
+    Algebra-mode emit uses ``base - PolarLocations(0, n, ...) * prism``;
+    builder-mode emit (#78, future) would use ``with PolarLocations(...):``.
+    Either is acceptable.
+    """
     source = _translate("tests/fixtures/tier4_patterns/polar_pattern_holes.FCStd")
-    assert "with PolarLocations(" in source, (
-        "expected `with PolarLocations(` block; emit still spells out copies"
+    assert "PolarLocations(" in source, (
+        "expected a PolarLocations(...) term; emit still spells out copies"
     )
-    # And no spelled-out Rot(Z=k) chain should remain.
+    # And no spelled-out Rot(Z=k) chain should remain for this single-Original
+    # uniform pattern.
     rot_z_lines = sum(1 for line in source.splitlines() if "Rot(Z=" in line)
     assert rot_z_lines == 0, (
         f"expected no Rot(Z=) terms in polar-pattern emit; found {rot_z_lines}"
     )
 
 
-@pytest.mark.xfail(strict=True, reason="tracks #75 — pattern emit not yet refactored to Locations contexts")
-def test_linear_pattern_uses_grid_locations() -> None:
-    """A uniform linear pattern should emit one ``with GridLocations(`` (or
-    ``Locations(...)``) block, not a chain of ``Pos(i·dx, 0, 0)`` terms."""
+def test_linear_pattern_uses_locations() -> None:
+    """A uniform linear pattern should emit one ``Locations(...)`` (or
+    ``GridLocations``) term, not a chain of ``Pos(i·dx, 0, 0)`` factors."""
     source = _translate("tests/fixtures/tier4_patterns/linear_pattern_holes.FCStd")
     assert "GridLocations(" in source or "Locations(" in source, (
         "expected a Locations context; emit still spells out positions"
+    )
+    # And the chained `Pos(i*dx, 0, 0) * extrude(...)` form should be gone.
+    extrude_terms = source.count(" * extrude(")
+    # The body chain itself uses one ``extrude(...)`` per Pad/Pocket; the
+    # pattern should add exactly one more for the Locations multiplier.
+    # If the spelled-out form is still emitted, ``* extrude(`` appears once
+    # per extra copy (3 for a 4-occurrence linear pattern).
+    assert extrude_terms <= 1, (
+        f"emit still chains extrudes via Pos; found {extrude_terms} ` * extrude(` terms"
     )
 
 
