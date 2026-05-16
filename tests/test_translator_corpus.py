@@ -24,6 +24,7 @@ FIXTURE_DIRS = [
     Path("tests/fixtures/tier3_corpus_c"),  # seed 271 — tier-3 random
     Path("tests/fixtures/tier6_corpus"),    # seed 519 — parametric (Spreadsheet)
     Path("tests/fixtures/tier4_corpus"),    # seed 613 — uses LinearPattern/PolarPattern/Mirrored
+    Path("tests/fixtures/sample_813"),      # seed 813 — true-random 100-file library audit
 ]
 
 # Fixtures whose translation reveals real v1 scope limitations. They stay in
@@ -83,6 +84,44 @@ EXCLUDED_FROM_TEST = {
     "Sprocket_ISO606_simplex_8x3_0_z26",       # ~2 ppm
     "Sprocket_ISO606_simplex_8x3_0_z39",       # ~2 ppm
     "Sprocket_ISO606_simplex_8x3_0_z36",       # 1.6 ppm
+    # sample_813 (seed-813 random library audit): 60/86 pass; the
+    # following 26 are excluded with their current best-known root cause.
+    # Most ride on closed/out-of-scope issues — Part::Feature and
+    # Part::Part2DObjectPython are explicitly out of v1 scope per the
+    # shape-import removal in PR #59 (SPEC §13.5).
+    #
+    # Part::Part2DObjectPython (sprocket / plate-wheel Teeth sketches) —
+    # out of scope per #53-closed:
+    "Plate_Wheel_simplex__x____",
+    "Sprocket_ANSI_simplex_2x1__z09",
+    "Sprocket_ANSI_simplex_2x1__z10",
+    "Sprocket_ANSI_simplex_2x1__z40",
+    "Sprocket_ANSI_simplex__x_____z10",
+    "Sprocket_ANSI_simplex__x_____z13",
+    "Sprocket_ANSI_simplex__x_____z16",
+    "Sprocket_ANSI_simplex__x_____z17",
+    "Sprocket_ANSI_simplex__x_____z18",
+    "Sprocket_ANSI_simplex__x_____z19",
+    "Sprocket_ANSI_simplex__x_____z39",
+    "Sprocket_ANSI_simplex__x__z22",
+    "Sprocket_ANSI_simplex__x__z28",
+    "Sprocket_ANSI_simplex__x__z30",
+    "Sprocket_ANSI_simplex__x__z37",
+    "Sprocket_ISO606_simplex__x__z40",
+    # Part::Feature (concrete-shape wrappers) — out of scope per SPEC §13.5:
+    "arduinounomissmetal",                      # Part::Feature 'arduino_uno' (concrete shape, not translatable)
+    "T-slot_20x20_90_joint",                    # Part::Feature 'Fusion004' (multiple Part::Chamfer ops baked in)
+    "T-slot_2020_round_roll-in_nut_M3",         # Part::Feature 'Cut001'
+    # Mesh::Feature — explicitly out of scope (v1 is solid CAD only):
+    "4mm_Pole_Nock_and_3mm_Pin_Nock",
+    # Other Part-workbench dressup / clone gaps:
+    "SM-S4303R-2-arms-small-horn",              # Part::Chamfer (top-level Part-workbench chamfer — no translator)
+    "KP08",                                     # PartDesign::FeatureBase Clone (Body-clone primitive; #37-adjacent)
+    "DN15_Stamped_Flange",                      # PolarPattern axis on rotated sketch (sub-issue of #25)
+    # Verify failures — translation succeeds but geometry diverges:
+    "ANSI-ASME-B18_2_2_Hex_Nut_1_4-20",         # ~7000 ppm volume drift in chamfer-edge selection (#57 precision-edge)
+    "FootPAD",                                  # Hausdorff 8.56 / tol 5.43 (bbox 54mm); #60 — real but unidentified
+    "WallHungBidet",                            # Hausdorff 99 / tol 72 (bbox 721mm); #60 — real geometric difference
 }
 
 FIXTURES = sorted(
