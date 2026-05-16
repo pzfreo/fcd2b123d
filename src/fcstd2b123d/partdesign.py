@@ -145,6 +145,10 @@ def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
 
     Subtractive / dressup features consume the running body shape; we track
     the last "result" variable name as we go.
+
+    When ``ctx.style == "builder"``, the body's feature chain is post-
+    processed into a single ``with BuildPart() as <body_var>:`` block —
+    see :func:`_body_to_builder` for the transformation rules.
     """
     units: list[TranslationUnit] = []
     current_var: str | None = None
@@ -254,7 +258,301 @@ def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
                     comment=comment,
                 )
             )
+
+    if getattr(ctx, "style", "algebra") == "builder":
+        units = _body_to_builder(units, body, current_var)
     return units
+
+
+# ---------------------------------------------------------------------------
+# Builder-mode body transformation (#78 phase 2)
+# ---------------------------------------------------------------------------
+
+_BODY_FEATURE_TYPES = {
+    "pad", "pocket", "revolution", "groove", "hole",
+    "fillet", "chamfer", "draft", "pattern",
+}
+
+# Regex patterns used to recognise the shape of each algebra-mode body line.
+# These are not as fragile as they look — the emit format is fixed by the
+# corresponding handler in this module, and the regression tests catch any
+# drift between handler and matcher.
+import re as _re
+
+_PAD_FIRST_RE = _re.compile(r"^(\w+)\s*=\s*(extrude\(.*\))$", _re.DOTALL)
+_REVOL_FIRST_RE = _re.compile(r"^(\w+)\s*=\s*(revolve\(.*\))$", _re.DOTALL)
+_CHAINED_ADD_RE = _re.compile(r"^(\w+)\s*=\s*(\w+)\s*\+\s*(.*)$", _re.DOTALL)
+_CHAINED_SUB_RE = _re.compile(r"^(\w+)\s*=\s*(\w+)\s*-\s*(.*)$", _re.DOTALL)
+_DRESSUP_RE = _re.compile(
+    r"^(\w+)\s*=\s*((?:fillet|chamfer|draft)\(.*\))$", _re.DOTALL
+)
+
+
+def _body_to_builder(
+    units: list[TranslationUnit], body, final_var: str | None
+) -> list[TranslationUnit]:
+    """Post-process a body's algebra-mode units into builder-mode output.
+
+    Algebra mode produces SSA-style ``pad = ...; pocket = pad - ...;
+    fillet_0 = fillet(...);`` per feature, each rebinding the whole running
+    solid. Builder mode collapses the chain into a single
+
+    .. code-block:: python
+
+        with BuildPart() as <body>:
+            extrude(...)
+            extrude(..., mode=Mode.SUBTRACT)
+            fillet(_edges_at(<body>.part, ...), radius=...)
+        result = <body>.part
+
+    block. The visible improvement is dropping the ``pad / pocket /
+    fillet_NNN`` cascade — bd_warehouse-style.
+
+    Sketch units (the ones emitting ``var = make_face(...)`` or the
+    builder-style ``with BuildSketch(...)`` blocks from phase 1) stay
+    outside the BuildPart context so they're available as variables
+    referenced from inside.
+
+    Limitations of this phase (2a):
+
+    * Pattern features stay as-is — they still emit the algebra-style
+      ``add(PolarLocations(...) * extrude(...), mode=Mode.SUBTRACT)``.
+      Phase 2b will merge them into ``with PolarLocations(R, N):``
+      contexts (issues #101 / #102).
+    * If the body's final feature isn't translatable to a BuildPart op
+      (e.g., the body's placement wrapper at the end), the whole body
+      falls back to algebra-mode emit.
+    """
+    if final_var is None:
+        return units
+
+    # Split units: sketches stay outside, body features go inside the context.
+    sketch_units: list[TranslationUnit] = []
+    body_units: list[TranslationUnit] = []
+    placed_unit: TranslationUnit | None = None
+    for u in units:
+        if u.var_name == f"{body.Name}_placed":
+            placed_unit = u
+        elif _is_body_feature_unit(u):
+            body_units.append(u)
+        else:
+            sketch_units.append(u)
+
+    if not body_units:
+        return units
+
+    # Builder-mode lines for the body chain. If any unit doesn't translate
+    # cleanly, abort and return original units unchanged — algebra-mode
+    # fallback is safer than emitting subtly wrong code.
+    # If any body unit references a context-aware sketch primitive inline,
+    # we can't safely wrap in BuildPart — bail and emit algebra mode for
+    # this whole body. The hoisting refactor needed to make those safe is
+    # phase-2b work.
+    if any(_has_inline_sketch_primitive(u.lines[0]) for u in body_units):
+        return units
+
+    inside_lines: list[str] = []
+    inside_imports: set[str] = set()
+    inside_helpers: set[str] = set()
+    for u in body_units:
+        translated = _to_builder_lines(u, body.Name)
+        if translated is None:
+            return units  # bail; emit algebra-mode for this body
+        new_lines, new_imports = translated
+        for nl in new_lines:
+            if u.comment and nl == new_lines[0]:
+                inside_lines.append(f"# {u.comment}")
+            inside_lines.append(nl)
+        # Preserve the original unit's imports — extrude/revolve/fillet/
+        # chamfer/_pattern_union/etc. are still referenced in the
+        # converted lines, so they need to import the same names.
+        inside_imports.update(u.imports)
+        inside_imports.update(new_imports)
+        inside_helpers.update(u.helpers)
+
+    body_var = body.Name
+    header = f"with BuildPart() as {body_var}:"
+    body_block_lines = [header] + ["    " + line for line in inside_lines]
+    # After the context, expose ``<body>.part`` as the running variable
+    # so any downstream code (pattern absorption, placement wrap, etc.)
+    # still references ``<body>``.
+    body_block_lines.append(f"{body_var} = {body_var}.part")
+
+    combined_imports = {"BuildPart"} | inside_imports
+    if any("Mode.SUBTRACT" in line for line in inside_lines):
+        combined_imports.add("Mode")
+
+    builder_unit = TranslationUnit(
+        var_name=body_var,
+        label=body.Label,
+        imports=combined_imports,
+        lines=body_block_lines,
+        comment=f"PartDesign::Body {body.Label!r} (builder mode, {len(body_units)} features)",
+        helpers=inside_helpers,
+    )
+
+    out = list(sketch_units) + [builder_unit]
+    if placed_unit is not None:
+        # The placement wrap was built when ``current_var`` was the last
+        # feature's name (e.g. ``Pad``). After the builder transform that
+        # variable no longer exists — the running solid is the body's
+        # rebound ``<body_var>``. Rewrite the wrap to reference the new
+        # name.
+        if final_var and final_var != body.Name:
+            placed_unit = TranslationUnit(
+                var_name=placed_unit.var_name,
+                label=placed_unit.label,
+                imports=placed_unit.imports,
+                lines=[
+                    _re.sub(rf"\b{_re.escape(final_var)}\b", body.Name, line)
+                    for line in placed_unit.lines
+                ],
+                comment=placed_unit.comment,
+                helpers=placed_unit.helpers,
+            )
+        out.append(placed_unit)
+    return out
+
+
+def _is_body_feature_unit(u: TranslationUnit) -> bool:
+    """Heuristic: a body-feature unit is a single-line algebra assignment
+    of one of the known body-chain shapes. Multi-line units (sketches with
+    pre-lines, BuildSketch blocks) are NOT body features.
+    """
+    if len(u.lines) != 1:
+        return False
+    line = u.lines[0]
+    # Crude but effective: body features always assign to var_name from
+    # an expression starting with extrude(, revolve(, fillet(, chamfer(,
+    # draft(, _pattern_union(, or chain a prior solid via ``var = base ±``.
+    if (
+        _PAD_FIRST_RE.match(line)
+        or _REVOL_FIRST_RE.match(line)
+        or _CHAINED_ADD_RE.match(line)
+        or _CHAINED_SUB_RE.match(line)
+        or _DRESSUP_RE.match(line)
+    ):
+        return True
+    return False
+
+
+# Build123d sketch primitives are context-aware: calling them inside a
+# BuildPart context raises ``BuildPart doesn't have a Circle object or
+# operation``. Body units whose lines reference these inline (typically
+# Hole's drill profile constructed as ``Sketch() + Circle(...)``) can't
+# be safely wrapped in a BuildPart block without first hoisting the
+# expression — a refactor deferred to phase 2b. For now, detect and
+# fall back to algebra mode for the whole body.
+_CONTEXT_AWARE_SKETCH_RE = _re.compile(
+    r"\b(Circle|Rectangle|RegularPolygon|Ellipse|Polygon|Trapezoid|SlotArc|SlotOverall)\("
+)
+
+
+def _has_inline_sketch_primitive(line: str) -> bool:
+    return bool(_CONTEXT_AWARE_SKETCH_RE.search(line))
+
+
+def _split_top_level_args(arglist: str) -> list[str]:
+    """Split a comma-separated argument list, respecting nested parentheses.
+
+    ``_split_top_level_args("a, b, foo(c, d), e")`` → ``["a", " b", " foo(c, d)", " e"]``.
+    """
+    args: list[str] = []
+    depth = 0
+    start = 0
+    for i, ch in enumerate(arglist):
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            args.append(arglist[start:i])
+            start = i + 1
+    args.append(arglist[start:])
+    return args
+
+
+def _to_builder_lines(
+    u: TranslationUnit, body_var: str
+) -> tuple[list[str], set[str]] | None:
+    """Convert one algebra-mode body-feature unit into builder-mode lines.
+
+    Returns (lines, extra_imports), or None if the unit doesn't match a
+    recognised pattern — callers should fall back to algebra mode.
+    """
+    line = u.lines[0]
+    body_part = f"{body_var}.part"
+
+    # First-feature Pad: ``var = extrude(...)``.
+    m = _PAD_FIRST_RE.match(line)
+    if m:
+        return [m.group(2)], set()
+
+    # First-feature Revolution: ``var = revolve(...)``.
+    m = _REVOL_FIRST_RE.match(line)
+    if m:
+        return [m.group(2)], set()
+
+    # Dressup (fillet/chamfer/draft) on the running body. The base var in
+    # the existing line is the prior unit's var_name; rewrite it to
+    # ``<body>.part``.
+    m = _DRESSUP_RE.match(line)
+    if m:
+        expr = m.group(2)
+        # Replace _edges_at(<base_var>, ...) / _faces_at(...) bases with
+        # <body>.part. We don't know the base var from the unit alone, so
+        # use a generic pattern: the first arg to _edges_at/_faces_at.
+        expr = _re.sub(
+            r"(_edges_at|_faces_at)\(\s*(\w+)\s*,",
+            lambda mm: f"{mm.group(1)}({body_part},",
+            expr,
+        )
+        return [expr], set()
+
+    # Chained additive: ``var = base + rhs``. Common for chained Pads,
+    # Revolutions inside a body, additive patterns via _pattern_union.
+    m = _CHAINED_ADD_RE.match(line)
+    if m:
+        base_var = m.group(2)
+        rhs = m.group(3).strip()
+        # Bare extrude(...)/revolve(...) → emit as a statement; that's
+        # the cleanest builder-mode form for added prisms.
+        if rhs.startswith(("extrude(", "revolve(")):
+            return [rhs], set()
+        # ``_pattern_union(base, copy1, copy2, ...)``: the helper unions
+        # the base with each copy. In builder mode, the base is already
+        # in the running part — adding ``_pattern_union(base, ...)``
+        # would double-add it. Convert to one ``add(copyN)`` per copy.
+        if rhs.startswith("_pattern_union(") and rhs.endswith(")"):
+            inner = rhs[len("_pattern_union("):-1]
+            args = _split_top_level_args(inner)
+            if args and args[0].strip() == base_var:
+                copies = [a.strip() for a in args[1:]]
+                if copies:
+                    return [f"add({c})" for c in copies], {"add"}
+        # Generic additive composition (mirror, etc.).
+        return [f"add({rhs})"], {"add"}
+
+    # Chained subtractive: ``var = base - rhs``.
+    m = _CHAINED_SUB_RE.match(line)
+    if m:
+        rhs = m.group(3).strip()
+        # Bare extrude(...) / revolve(...) — inject mode=Mode.SUBTRACT.
+        # extrude(profile, amount=N) → extrude(profile, amount=N,
+        # mode=Mode.SUBTRACT).
+        if rhs.startswith(("extrude(", "revolve(")):
+            # Inject the mode kwarg before the closing paren of the call.
+            if rhs.endswith(")"):
+                rewritten = rhs[:-1].rstrip()
+                if rewritten.endswith(","):
+                    rewritten = rewritten + " mode=Mode.SUBTRACT)"
+                else:
+                    rewritten = rewritten + ", mode=Mode.SUBTRACT)"
+                return [rewritten], set()
+        # Pattern with PolarLocations / Locations / mirror() / etc.
+        return [f"add({rhs}, mode=Mode.SUBTRACT)"], {"add"}
+
+    return None
 
 
 # ---------------------------------------------------------------------------
