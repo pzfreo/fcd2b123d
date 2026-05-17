@@ -695,3 +695,70 @@ def test_builder_and_algebra_emit_same_geometry() -> None:
             f"{fx}: algebra={vols['algebra']} builder={vols['builder']} "
             f"(rel.err={rel_err})"
         )
+
+
+# ---------------------------------------------------------------------------
+# #128 — CLI plumbing for --emit / --body-style (Phase 1 PR A)
+# ---------------------------------------------------------------------------
+
+
+def test_body_style_flag_works_as_style_replacement() -> None:
+    """``--body-style=algebra`` should behave identically to the old
+    ``--style=algebra`` (which is now deprecated)."""
+    via_style = _translate(
+        "tests/fixtures/tier1_primitives/box_10x20x30.FCStd", style="algebra"
+    )
+    via_body_style = _translate(
+        "tests/fixtures/tier1_primitives/box_10x20x30.FCStd", body_style="algebra"
+    )
+    assert via_style == via_body_style
+
+
+def test_style_flag_emits_deprecation_warning() -> None:
+    """The legacy ``--style`` flag should still work but emit a
+    deprecation warning to stderr pointing at ``--body-style``."""
+    import os
+    import subprocess
+
+    fc_py = os.environ.get("FCSTD2B123D_FREECAD_PYTHON")
+    if not fc_py:
+        pytest.skip("FCSTD2B123D_FREECAD_PYTHON not set")
+    fc_pp = os.environ.get("FCSTD2B123D_FREECAD_PYTHONPATH", "")
+    src_root = str(__import__("pathlib").Path(__file__).parent.parent / "src")
+    out = subprocess.run(
+        [fc_py, "-m", "fcstd2b123d", "--style", "algebra",
+         "tests/fixtures/tier1_primitives/box_10x20x30.FCStd"],
+        capture_output=True, text=True, check=False,
+        env={**os.environ, "PYTHONPATH": ":".join(p for p in (src_root, fc_pp) if p)},
+    )
+    assert out.returncode == 0, f"translate exited {out.returncode}\n{out.stderr}"
+    combined = out.stderr
+    assert "deprecated" in combined.lower(), (
+        f"expected deprecation notice in stderr; got:\n{combined}"
+    )
+    assert "--body-style" in combined, (
+        f"expected --body-style mentioned in deprecation; got:\n{combined}"
+    )
+
+
+def test_emit_class_not_yet_implemented() -> None:
+    """``--emit=class`` raises NotImplementedError until Phase 1 PR B
+    lands the behaviour. The CLI accepts the flag in PR A so that
+    callers can wire against the final shape early."""
+    import os
+    import subprocess
+
+    fc_py = os.environ.get("FCSTD2B123D_FREECAD_PYTHON")
+    if not fc_py:
+        pytest.skip("FCSTD2B123D_FREECAD_PYTHON not set")
+    fc_pp = os.environ.get("FCSTD2B123D_FREECAD_PYTHONPATH", "")
+    src_root = str(__import__("pathlib").Path(__file__).parent.parent / "src")
+    out = subprocess.run(
+        [fc_py, "-m", "fcstd2b123d", "--emit", "class",
+         "tests/fixtures/tier1_primitives/box_10x20x30.FCStd"],
+        capture_output=True, text=True, check=False,
+        env={**os.environ, "PYTHONPATH": ":".join(p for p in (src_root, fc_pp) if p)},
+    )
+    assert out.returncode != 0
+    assert "NotImplementedError" in out.stderr
+    assert "family-extraction" in out.stderr
