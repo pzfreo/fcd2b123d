@@ -233,6 +233,18 @@ def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
             unit = _translate_pattern(child, current_var, ctx)
             units.append(unit)
             current_var = unit.var_name
+            # Algebra-mode polar absorption: when this is a single-Original
+            # PolarPattern over a Pocket whose sketch is a simple offset
+            # Circle, merge Pocket + Pattern into a single
+            # ``Pattern = <pre_pocket> - PolarLocations(R, N) * extrude(
+            # at-origin Circle, A)`` line and drop the now-unused Pocket
+            # and offset-sketch units. The visible improvement is the same
+            # one builder-mode gets via _move_offset_to_polar (#110), but
+            # for the default algebra emit.
+            if tid == "PartDesign::PolarPattern":
+                units, current_var = _try_absorb_polar_algebra(
+                    child, units, current_var
+                )
         else:
             raise UnsupportedFeatureError(
                 tid,
@@ -262,6 +274,145 @@ def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
     if getattr(ctx, "style", "algebra") == "builder":
         units = _body_to_builder(units, body, current_var)
     return units
+
+
+# ---------------------------------------------------------------------------
+# Algebra-mode polar absorption (#101 algebra-side equivalent)
+# ---------------------------------------------------------------------------
+#
+# When a single-Original PolarPattern follows a Pocket whose sketch is a
+# simple offset Circle, the two-line algebra-mode emit can be collapsed:
+#
+#   hole = Pos(18, 0) * Circle(2)
+#   pocket = pad - extrude(hole, amount=12)
+#   polar = pocket - PolarLocations(0, 5, start_angle=60, angular_range=300) * extrude(hole, amount=12)
+#
+# becomes:
+#
+#   polar = pad - PolarLocations(18, 6) * extrude(Sketch() + Circle(2), amount=12)
+#
+# The ``hole`` sketch and ``pocket`` lines are dropped. ``pad`` (the pre-
+# Pocket base) becomes the absorbed expression's base.
+
+
+import re as _re_alg  # extra alias so the late helpers don't collide
+
+_ALG_POCKET_LINE_RE = _re_alg.compile(
+    r"^(\w+)\s*=\s*(\w+)\s*-\s*extrude\(\s*(\w+)\s*,\s*amount=([^)]+?)\s*\)$"
+)
+_ALG_PATTERN_LINE_RE = _re_alg.compile(
+    r"^(\w+)\s*=\s*(\w+)\s*-\s*PolarLocations\(\s*"
+    r"0,\s*(\d+),\s*start_angle=([^,]+?)\s*,\s*angular_range=([^)]+?)\s*\)"
+    r"\s*\*\s*extrude\(\s*(\w+)\s*,\s*amount=([^)]+?)\s*\)$"
+)
+
+
+def _try_absorb_polar_algebra(
+    pattern_obj, units: list, current_var: str
+) -> tuple[list, str]:
+    """Try to collapse Pocket + PolarPattern into a single absorbed line.
+
+    Operates on the in-progress ``units`` list. If the last unit is a
+    polar-pattern line matching the absorbable shape, and the second-
+    to-last unit is the corresponding Pocket, and the sketch referenced
+    by both is a simple ``Pos(R, 0) * Circle(r)`` form, then:
+
+    * Pop the Pocket unit.
+    * Pop the sketch unit (if it's an offset-Circle, indicating it was
+      used solely for the absorbed pattern).
+    * Rewrite the pattern unit's line to the absorbed form.
+
+    Falls through silently when conditions aren't met — patterns over
+    non-circle sketches or with multiple Originals keep the existing
+    emit.
+    """
+    if len(units) < 2:
+        return units, current_var
+    pat_unit = units[-1]
+    pocket_unit = units[-2]
+    if not pat_unit.lines or not pocket_unit.lines:
+        return units, current_var
+
+    m_pat = _ALG_PATTERN_LINE_RE.match(pat_unit.lines[0].strip())
+    if m_pat is None:
+        return units, current_var
+    pat_var, pat_base, extra_count, start_angle, angular_range, pat_sk, pat_amount = (
+        m_pat.group(1), m_pat.group(2), int(m_pat.group(3)),
+        m_pat.group(4).strip(), m_pat.group(5).strip(),
+        m_pat.group(6), m_pat.group(7).strip(),
+    )
+
+    m_poc = _ALG_POCKET_LINE_RE.match(pocket_unit.lines[0].strip())
+    if m_poc is None:
+        return units, current_var
+    poc_var, poc_base, poc_sk, poc_amount = (
+        m_poc.group(1), m_poc.group(2), m_poc.group(3), m_poc.group(4).strip(),
+    )
+
+    # Continuity checks: the pattern subtracts from the pocket, and both
+    # use the same sketch + amount.
+    if (
+        pat_base != poc_var
+        or pat_sk != poc_sk
+        or pat_amount != poc_amount
+    ):
+        return units, current_var
+
+    # Uniformity check: this is a "skip the first" form. ``start_angle``
+    # equals the step, ``angular_range`` equals extra * step,
+    # step = 360 / (extra + 1).
+    total = extra_count + 1
+    try:
+        sa = float(start_angle)
+        ar = float(angular_range)
+    except ValueError:
+        return units, current_var
+    expected_step = 360.0 / total
+    if (
+        abs(sa - expected_step) > 1e-6
+        or abs(ar - extra_count * expected_step) > 1e-6
+    ):
+        return units, current_var
+
+    # Find the sketch unit by var_name and parse it for offset + radius.
+    sk_unit = None
+    sk_idx = -1
+    for i in range(len(units) - 3, -1, -1):
+        if units[i].var_name == poc_sk:
+            sk_unit = units[i]
+            sk_idx = i
+            break
+    if sk_unit is None:
+        return units, current_var
+    extracted = _extract_offset_circle_sketch(sk_unit)
+    if extracted is None:
+        return units, current_var
+    R, r = extracted
+
+    # Build the absorbed pattern unit.
+    absorbed_line = (
+        f"{pat_var} = {poc_base} - "
+        f"PolarLocations({format_value(R)}, {total}) "
+        f"* extrude(Sketch() + Circle({format_value(r)}), amount={pat_amount})"
+    )
+    new_imports = set(pat_unit.imports) | {"Sketch", "Circle"}
+    new_unit = TranslationUnit(
+        var_name=pat_var,
+        label=pat_unit.label,
+        imports=new_imports,
+        lines=[absorbed_line],
+        comment=f"{pat_unit.comment} (absorbed Pocket+Pattern)",
+        helpers=pat_unit.helpers,
+    )
+
+    # Build a new units list: drop the pocket unit and the sketch unit,
+    # replace the pattern unit.
+    new_units = list(units[:-2])     # everything before Pocket and Pattern
+    # Drop the sketch unit from earlier in the list.
+    new_units = [u for i, u in enumerate(new_units) if i != sk_idx]
+    new_units.append(new_unit)
+
+    return new_units, pat_var
 
 
 # ---------------------------------------------------------------------------
