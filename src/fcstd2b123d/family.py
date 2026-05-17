@@ -49,9 +49,11 @@ import yaml
 # extracts the constant N from an ``extrude(..., amount=N)`` call;
 # ``spreadsheet`` reads from a tier-6 cell of the same name;
 # ``constant`` uses the manifest's declared ``default`` for every
-# fixture (the parameter doesn't vary, but is exposed as a kwarg).
+# fixture (the parameter doesn't vary, but is exposed as a kwarg);
+# ``lookup`` reads from the manifest's ``dimensions_table`` keyed by
+# the value of another filename-sourced parameter.
 _VALID_PARAM_SOURCES = frozenset({
-    "filename", "extrude_amount", "spreadsheet", "constant",
+    "filename", "extrude_amount", "spreadsheet", "constant", "lookup",
 })
 
 
@@ -95,6 +97,16 @@ class FamilyManifest:
     filename_pattern: str | None = None
     docstring: str | None = None
     base_class: str | None = None
+    # ``dimensions_table`` keys are stringified lookup keys (e.g. ``"280"``
+    # for an HE-B 280 fixture). Each value is a mapping of param name → value.
+    # Used by parameters declared with ``source: lookup``.
+    dimensions_table: dict[str, dict[str, Any]] | None = field(
+        default=None, compare=False
+    )
+    # The name of the filename-sourced parameter whose value is used as
+    # the dimensions_table key. When not set, defaults to the first
+    # ``source: filename`` parameter.
+    lookup_key: str | None = None
     source_path: Path | None = field(default=None, compare=False)
 
 
@@ -264,10 +276,67 @@ def _validate(data: dict, source_path: Path | None) -> FamilyManifest:
     if base_class is not None and not isinstance(base_class, str):
         raise ManifestError("base_class must be a string when provided")
 
+    dimensions_table = data.get("dimensions_table")
+    if dimensions_table is not None:
+        if not isinstance(dimensions_table, dict):
+            raise ManifestError(
+                "dimensions_table must be a mapping of {key: {param: value, ...}}"
+            )
+        # Coerce all top-level keys to strings — YAML often parses numeric
+        # keys as ints; we want a uniform string lookup.
+        coerced = {}
+        for k, v in dimensions_table.items():
+            if not isinstance(v, dict):
+                raise ManifestError(
+                    f"dimensions_table entry for {k!r} must be a mapping "
+                    f"of param names to values; got {type(v).__name__}"
+                )
+            coerced[str(k)] = v
+        dimensions_table = coerced
+
+    lookup_key = data.get("lookup_key")
+    if lookup_key is not None and not isinstance(lookup_key, str):
+        raise ManifestError("lookup_key must be a string when provided")
+
+    # Cross-checks for the lookup pipeline.
+    lookup_params = [p for p in parameters if p.source == "lookup"]
+    if lookup_params and dimensions_table is None:
+        raise ManifestError(
+            f"parameters with source=lookup require a dimensions_table: "
+            f"{[p.name for p in lookup_params]}"
+        )
+    if dimensions_table is not None and not lookup_params:
+        raise ManifestError(
+            "dimensions_table is set but no parameter has source=lookup"
+        )
+    if dimensions_table is not None:
+        # Verify every lookup param appears in every table row.
+        for key, row in dimensions_table.items():
+            missing = [p.name for p in lookup_params if p.name not in row]
+            if missing:
+                raise ManifestError(
+                    f"dimensions_table[{key!r}] missing lookup params: {missing}"
+                )
+        # Resolve the lookup_key default to the first filename-sourced param.
+        if lookup_key is None:
+            filename_params = [p.name for p in parameters if p.source == "filename"]
+            if not filename_params:
+                raise ManifestError(
+                    "dimensions_table requires either an explicit lookup_key "
+                    "or at least one parameter with source=filename"
+                )
+            lookup_key = filename_params[0]
+        # Verify the lookup_key references a real declared param.
+        if lookup_key not in {p.name for p in parameters}:
+            raise ManifestError(
+                f"lookup_key {lookup_key!r} is not a declared parameter"
+            )
+
     # Reject unknown top-level keys so typos surface loudly.
     allowed = {
         "family", "class_name", "standard", "fixture_glob",
         "filename_pattern", "parameters", "docstring", "base_class",
+        "dimensions_table", "lookup_key",
     }
     unknown = set(data.keys()) - allowed
     if unknown:
@@ -285,6 +354,8 @@ def _validate(data: dict, source_path: Path | None) -> FamilyManifest:
         parameters=tuple(parameters),
         docstring=docstring,
         base_class=base_class,
+        dimensions_table=dimensions_table,
+        lookup_key=lookup_key,
         source_path=source_path,
     )
 

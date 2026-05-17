@@ -159,6 +159,43 @@ def test_extract_en_10058_family_produces_valid_class(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(not _freecad_available(), reason="FCSTD2B123D_FREECAD_PYTHON not set")
+def test_extract_he_b_family_with_lookup_table(tmp_path: Path) -> None:
+    """End-to-end: extract DIN 1025-2 HE-B family — exercises both the
+    multi-param substitution algorithm AND the lookup-table source.
+
+    The HE-B profile has 5 dimensions (h, b, tw, tf, r); only ``h`` is
+    in the filename. The other 4 come from the manifest's dimensions
+    table. Each fixture's emit has literals like ``tw/2 + r``,
+    ``h/2 - tf - r`` that need two- and three-param substitution.
+    """
+    manifest = load_manifest(REPO_ROOT / "families" / "din_1025_2_he_b.yaml")
+    source = extract_family(manifest, fixtures_root=REPO_ROOT / "tests" / "fixtures")
+
+    namespace: dict = {}
+    exec(source, namespace)
+    cls = namespace["DIN1025HEBProfile"]
+
+    # Three known-size profiles. Bbox must match (b, h, length) exactly.
+    for h, b, tw, tf, r in [
+        (280, 280, 10.5, 18, 24),
+        (320, 300, 11.5, 20.5, 27),
+        (900, 300, 18.5, 35, 30),
+    ]:
+        beam = cls(h=h, b=b, tw=tw, tf=tf, r=r, length=50)
+        bbox = beam.bounding_box()
+        extents = sorted([bbox.size.X, bbox.size.Y, bbox.size.Z])
+        expected = sorted([float(b), float(h), 50.0])
+        assert extents == pytest.approx(expected, abs=1e-6), (
+            f"HE-B {h}: bbox extents {extents} != expected {expected}"
+        )
+
+    # And the volume scales monotonically with h.
+    v_280 = cls(h=280, b=280, tw=10.5, tf=18, r=24, length=50).volume
+    v_900 = cls(h=900, b=300, tw=18.5, tf=35, r=30, length=50).volume
+    assert v_900 > v_280
+
+
+@pytest.mark.skipif(not _freecad_available(), reason="FCSTD2B123D_FREECAD_PYTHON not set")
 def test_extract_en_10058_matches_every_fixture(tmp_path: Path) -> None:
     """For every fixture in the manifest's glob, instantiating the
     generated class with the fixture's parameters produces the same
