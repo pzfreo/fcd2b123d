@@ -377,10 +377,13 @@ def _body_to_builder(
     # because the extrude both adds *and* gets multiplied for subtraction.
     # The fix: pre-compute the prism in a module-level variable, then
     # iterate the multiplied list inside the BuildPart.
-    inside_lines, hoisted_prism_units, extra_imports = _hoist_pattern_prisms(
-        inside_lines, body_units
+    inside_lines, hoisted_prism_units, extra_imports, absorbed_sketches = (
+        _hoist_pattern_prisms(inside_lines, body_units, sketch_units)
     )
     inside_imports |= extra_imports
+    # Drop sketches that polar absorption replaced with an inline
+    # at-origin form — they're no longer referenced anywhere.
+    sketch_units = [s for s in sketch_units if s.var_name not in absorbed_sketches]
     sketch_units = list(sketch_units) + hoisted_prism_units
 
     body_var = body.Name
@@ -558,15 +561,27 @@ def _parse_pattern_line(line: str) -> tuple[str, str, str, str] | None:
 
 
 def _hoist_pattern_prisms(
-    inside_lines: list[str], body_units: list[TranslationUnit]
-) -> tuple[list[str], list[TranslationUnit], set[str]]:
+    inside_lines: list[str],
+    body_units: list[TranslationUnit],
+    sketch_units: list[TranslationUnit],
+) -> tuple[list[str], list[TranslationUnit], set[str], set[str]]:
     """Rewrite pattern lines to use a hoisted prism. See module-level
-    comment block above for the why. Also runs polar-absorption as a
-    post-pass: when a Pocket immediately precedes a polar for-loop on
-    the same prism, the two are collapsed into a single
-    ``PolarLocations(0, N+1) * prism`` loop that covers all positions
-    (the original Pocket's location at angle 0 is folded into the
-    pattern).
+    comment block above for the why.
+
+    Also runs polar-absorption as a post-pass: when a Pocket
+    immediately precedes a polar for-loop on the same prism, the two
+    are collapsed into a single ``PolarLocations(0, N+1) * prism``
+    loop that covers all positions.
+
+    Finally, when polar absorption succeeds AND the underlying sketch
+    is a single offset-Circle (``Sketch + Pos(R, 0) * Circle(r)``), the
+    offset is moved from the sketch into ``PolarLocations(R, N+1)`` and
+    the hoisted prism uses the at-origin Circle directly. The original
+    BuildSketch becomes redundant and is returned in ``absorbed_sketches``
+    so the caller can drop it.
+
+    Returns: ``(rewritten_lines, hoisted_units, extra_imports,
+    absorbed_sketch_names)``.
     """
     new_lines: list[str] = []
     hoisted: list[TranslationUnit] = []
@@ -603,7 +618,128 @@ def _hoist_pattern_prisms(
         extra_imports.add("add")
 
     new_lines = _absorb_polar_original(new_lines)
-    return new_lines, hoisted, extra_imports
+
+    # Phase-2b polish: drop the offset BuildSketch when polar absorption
+    # produced a ``PolarLocations(0, N) * <sk>_prism`` loop AND the
+    # underlying sketch is a simple offset Circle. The offset moves
+    # into PolarLocations.
+    new_lines, dropped_sketches = _move_offset_to_polar(
+        new_lines, hoisted, sketch_units
+    )
+    if dropped_sketches:
+        extra_imports.add("Sketch")
+        extra_imports.add("Circle")
+
+    return new_lines, hoisted, extra_imports, dropped_sketches
+
+
+# Match a polar for-loop after the first absorption pass — at this point
+# absorbed loops use ``PolarLocations(0, N) * <prism>`` form.
+_ABSORBED_POLAR_RE = _re.compile(
+    r"^for s in PolarLocations\(\s*0\s*,\s*(\d+)\s*\)\s*\*\s*(\w+):\s*$"
+)
+
+
+def _move_offset_to_polar(
+    new_lines: list[str],
+    hoisted: list[TranslationUnit],
+    sketch_units: list[TranslationUnit],
+) -> tuple[list[str], set[str]]:
+    """When an absorbed-polar for-loop's prism comes from a sketch that's
+    just ``Sketch() + Pos(R, 0) * Circle(r)`` (or builder-mode
+    equivalent), move ``R`` into ``PolarLocations(R, N)`` and rewrite the
+    prism to extrude an at-origin Circle directly. The original sketch
+    is no longer referenced.
+
+    Returns: ``(rewritten_lines, dropped_sketch_names)``.
+    """
+    sk_by_name = {su.var_name: su for su in sketch_units}
+    prism_by_name = {pu.var_name: pu for pu in hoisted}
+    dropped: set[str] = set()
+    out: list[str] = []
+
+    for line in new_lines:
+        m = _ABSORBED_POLAR_RE.match(line)
+        if m is None:
+            out.append(line)
+            continue
+        count = int(m.group(1))
+        prism_var = m.group(2)
+        prism_unit = prism_by_name.get(prism_var)
+        if prism_unit is None:
+            out.append(line)
+            continue
+        # Extract the source sketch name from the prism line:
+        # "<prism_var> = extrude(<src_sketch>, amount=A)"
+        prism_line = prism_unit.lines[0]
+        prism_m = _re.match(
+            r"^(\w+) = extrude\((\w+),\s*amount=(.+?)\)$", prism_line
+        )
+        if prism_m is None:
+            out.append(line)
+            continue
+        src_sk = prism_m.group(2)
+        amount = prism_m.group(3).strip()
+        sk_unit = sk_by_name.get(src_sk)
+        if sk_unit is None:
+            out.append(line)
+            continue
+        extracted = _extract_offset_circle_sketch(sk_unit)
+        if extracted is None:
+            out.append(line)
+            continue
+        R, r = extracted
+        # Rewrite the prism unit's lines to use at-origin Circle.
+        prism_unit.lines[0] = (
+            f"{prism_var} = extrude(Sketch() + Circle({format_value(r)}), "
+            f"amount={amount})"
+        )
+        prism_unit.imports = set(prism_unit.imports) | {"Sketch", "Circle"}
+        # Rewrite the loop to use PolarLocations(R, N).
+        out.append(f"for s in PolarLocations({format_value(R)}, {count}) * {prism_var}:")
+        dropped.add(src_sk)
+
+    return out, dropped
+
+
+def _extract_offset_circle_sketch(
+    sketch_unit: TranslationUnit,
+) -> tuple[float, float] | None:
+    """Recognise a sketch unit emitted as either:
+
+    * algebra mode: a single ``<var> = Pos(R, 0) * Circle(r)`` line
+    * builder mode: a 4-line ``with BuildSketch() ... with Locations((R, 0)):
+      Circle(r); <var> = <var>.sketch`` block
+
+    Returns ``(R, r)`` or None.
+    """
+    lines = [ln for ln in sketch_unit.lines if ln.strip()]
+    # Algebra single-line form.
+    if len(lines) == 1:
+        m = _re.match(
+            r"^(\w+)\s*=\s*\(?\s*Pos\(\s*([^,]+?)\s*,\s*0(?:\.0?)?\s*\)\s*\*\s*Circle\(\s*([^)]+?)\s*\)\s*\)?\s*$",
+            lines[0],
+        )
+        if m is None:
+            return None
+        try:
+            return float(m.group(2)), float(m.group(3))
+        except ValueError:
+            return None
+    # Builder-mode 4-line form.
+    if len(lines) == 4:
+        try:
+            R = float(_re.match(
+                r"^\s*with Locations\(\(\s*([^,]+?)\s*,\s*0(?:\.0?)?\s*\)\):\s*$",
+                lines[1],
+            ).group(1))
+            r = float(_re.match(
+                r"^\s*Circle\(\s*([^)]+?)\s*\)\s*$", lines[2]
+            ).group(1))
+            return R, r
+        except (AttributeError, ValueError):
+            return None
+    return None
 
 
 # Match an in-context Pocket extrude (the original carve before a Pattern).
