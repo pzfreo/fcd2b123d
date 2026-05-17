@@ -245,6 +245,10 @@ def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
                 units, current_var = _try_absorb_polar_algebra(
                     child, units, current_var
                 )
+            elif tid == "PartDesign::LinearPattern":
+                units, current_var = _try_absorb_linear_algebra(
+                    child, units, current_var
+                )
         else:
             raise UnsupportedFeatureError(
                 tid,
@@ -413,6 +417,138 @@ def _try_absorb_polar_algebra(
     new_units.append(new_unit)
 
     return new_units, pat_var
+
+
+_ALG_LINEAR_LINE_RE = _re_alg.compile(
+    r"^(\w+)\s*=\s*(\w+)\s*-\s*Locations\((.*)\)\s*\*\s*extrude\(\s*(\w+)\s*,\s*amount=([^)]+?)\s*\)$"
+)
+
+
+def _try_absorb_linear_algebra(
+    pattern_obj, units: list, current_var: str
+) -> tuple[list, str]:
+    """Mirror of ``_try_absorb_polar_algebra`` for LinearPattern.
+
+    Recognises the uniform-1D form ``Locations((dx, 0, 0), (2dx, 0, 0),
+    ..., (N·dx, 0, 0))`` and absorbs the Pocket+Pattern into a single
+    ``GridLocations(dx, 0, N+1, 1)`` line when the original sketch's
+    offset matches the centered alignment (``R == -(N)·dx/2``). For
+    off-centered originals, falls through with the current form.
+    """
+    if len(units) < 2:
+        return units, current_var
+    pat_unit = units[-1]
+    pocket_unit = units[-2]
+    if not pat_unit.lines or not pocket_unit.lines:
+        return units, current_var
+
+    m_pat = _ALG_LINEAR_LINE_RE.match(pat_unit.lines[0].strip())
+    if m_pat is None:
+        return units, current_var
+    pat_var = m_pat.group(1)
+    pat_base = m_pat.group(2)
+    positions_str = m_pat.group(3)
+    pat_sk = m_pat.group(4)
+    pat_amount = m_pat.group(5).strip()
+
+    m_poc = _ALG_POCKET_LINE_RE.match(pocket_unit.lines[0].strip())
+    if m_poc is None:
+        return units, current_var
+    poc_var = m_poc.group(1)
+    poc_base = m_poc.group(2)
+    poc_sk = m_poc.group(3)
+    poc_amount = m_poc.group(4).strip()
+
+    if pat_base != poc_var or pat_sk != poc_sk or pat_amount != poc_amount:
+        return units, current_var
+
+    # Parse uniform-X positions from the Locations call.
+    step_dx = _detect_uniform_linear_step_algebra(positions_str)
+    if step_dx is None:
+        return units, current_var
+    args = _split_top_level_args(positions_str)
+    extra_count = len(args)
+    total = extra_count + 1
+
+    # Sketch must be offset Circle.
+    sk_unit = None
+    sk_idx = -1
+    for i in range(len(units) - 3, -1, -1):
+        if units[i].var_name == poc_sk:
+            sk_unit = units[i]
+            sk_idx = i
+            break
+    if sk_unit is None:
+        return units, current_var
+    extracted = _extract_offset_circle_sketch(sk_unit)
+    if extracted is None:
+        return units, current_var
+    R, r = extracted
+
+    # Centered-alignment check: GridLocations(dx, 0, N, 1) defaults to
+    # CENTER and places N copies at -(N-1)·dx/2, ..., (N-1)·dx/2. The
+    # absorbed form fits iff the original's offset is at the leftmost
+    # such position (R == -(N-1)·dx/2). Off-centered originals could be
+    # absorbed with explicit alignment, but the common library case is
+    # exactly this centered form.
+    expected_R = -(total - 1) * step_dx / 2
+    if abs(R - expected_R) > 1e-6 * max(1.0, abs(R)):
+        return units, current_var
+
+    absorbed_line = (
+        f"{pat_var} = {poc_base} - "
+        f"GridLocations({format_value(step_dx)}, 0, {total}, 1) "
+        f"* extrude(Sketch() + Circle({format_value(r)}), amount={pat_amount})"
+    )
+    new_imports = (set(pat_unit.imports) | {"Sketch", "Circle", "GridLocations"})
+    new_imports.discard("Locations")
+    new_unit = TranslationUnit(
+        var_name=pat_var,
+        label=pat_unit.label,
+        imports=new_imports,
+        lines=[absorbed_line],
+        comment=f"{pat_unit.comment} (absorbed Pocket+Pattern)",
+        helpers=pat_unit.helpers,
+    )
+
+    new_units = list(units[:-2])
+    new_units = [u for i, u in enumerate(new_units) if i != sk_idx]
+    new_units.append(new_unit)
+    return new_units, pat_var
+
+
+def _detect_uniform_linear_step_algebra(positions_str: str) -> float | None:
+    """Parse ``(dx, 0, 0), (2dx, 0, 0), (3dx, 0, 0)`` style positions
+    from an algebra-mode Locations call. Returns dx if uniform, else
+    None (also rejects positions with non-zero y or z).
+    """
+    args = _split_top_level_args(positions_str)
+    if not args:
+        return None
+    xs: list[float] = []
+    for a in args:
+        a = a.strip()
+        if not (a.startswith("(") and a.endswith(")")):
+            return None
+        coords = _split_top_level_args(a[1:-1])
+        if len(coords) != 3:
+            return None
+        try:
+            x = float(coords[0].strip())
+            y = float(coords[1].strip())
+            z = float(coords[2].strip())
+        except ValueError:
+            return None
+        if abs(y) > 1e-9 or abs(z) > 1e-9:
+            return None
+        xs.append(x)
+    step = xs[0]
+    if abs(step) < 1e-9:
+        return None
+    for i, x in enumerate(xs, start=1):
+        if abs(x - i * step) > 1e-6 * max(1.0, abs(i * step)):
+            return None
+    return step
 
 
 # ---------------------------------------------------------------------------
