@@ -498,8 +498,27 @@ def _snake_case_pass(source: str, label_map: dict[str, str] | None = None) -> st
         rename[t] = snake
 
     out_lines: list[str] = []
+    in_docstring = False  # tracks across-line multi-line docstring state
     for line in source.split("\n"):
         stripped = line.lstrip()
+
+        # Multi-line docstring tracking: a line that opens AND closes a
+        # docstring (``""" ... """`` on one line) toggles state twice and
+        # leaves us back where we started. A line with a single ``"""``
+        # toggles once. Inside a docstring, never rename — that's the
+        # case that caught us before (the inlined ``_edges_at`` helper's
+        # body text contained "Fillet / Chamfer", and "Fillet" was a
+        # variable target in the body chain, so the snake-case pass was
+        # rewriting it to "fillet_0" inside the docstring).
+        triple_count = line.count('"""')
+        was_in_docstring = in_docstring
+        if triple_count == 1:
+            in_docstring = not in_docstring
+        # Even when ``triple_count == 2`` on a single line (opens AND
+        # closes on the same line), ``in_docstring`` ends back as
+        # ``was_in_docstring`` — no state change. We still want to skip
+        # the line because its content is docstring.
+
         # Preserve comments, docstrings, and import lines exactly. Import
         # lines reference build123d's PascalCase class names (Sketch, Part,
         # Plane, Box, ...) which must not be renamed even if a translated
@@ -507,6 +526,7 @@ def _snake_case_pass(source: str, label_map: dict[str, str] | None = None) -> st
         if (
             stripped.startswith("#")
             or stripped.startswith('"""')
+            or was_in_docstring
             or stripped.startswith("from ")
             or stripped.startswith("import ")
         ):
