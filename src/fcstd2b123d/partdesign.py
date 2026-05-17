@@ -655,7 +655,14 @@ def _body_to_builder(
         # converted lines, so they need to import the same names.
         inside_imports.update(u.imports)
         inside_imports.update(new_imports)
-        inside_helpers.update(u.helpers)
+        # Carry helpers only if the rewritten lines actually still call
+        # them. The Mirror builder-mode rewrite (issue #117) drops the
+        # ``_pattern_union`` wrapper, so dragging that helper along would
+        # emit a dead definition.
+        joined = "\n".join(new_lines)
+        for h in u.helpers:
+            if h in joined:
+                inside_helpers.add(h)
 
     # Phase 2b: hoist pattern prisms out of the BuildPart context.
     # Inside a BuildPart, ``extrude(<sketch>, ...)`` has a side effect —
@@ -1178,6 +1185,44 @@ def _split_top_level_args(arglist: str) -> list[str]:
     return args
 
 
+def _inject_private_mode_in_inner_extrude(expr: str) -> tuple[str, bool]:
+    """If ``expr`` wraps a bare ``extrude(...)`` call (e.g. inside
+    ``mirror(extrude(...), about=...)``), inject ``mode=Mode.PRIVATE``
+    into that inner extrude so its in-BuildPart Mode.ADD side effect
+    doesn't add the source prism a second time.
+
+    Returns ``(rewritten_expr, did_inject)``. The top-level ``extrude(...)``
+    case (where the extrude *is* the intended add) is left untouched —
+    only inner ones get the Mode.PRIVATE treatment.
+    """
+    # Top-level ``extrude(...)`` is the intended add — no injection.
+    if expr.startswith("extrude("):
+        return expr, False
+    # Find an inner ``extrude(`` call. Match the substring and balanced
+    # parens for the call's argument list.
+    idx = expr.find("extrude(")
+    if idx == -1:
+        return expr, False
+    arg_start = idx + len("extrude(")
+    depth = 1
+    i = arg_start
+    while i < len(expr) and depth > 0:
+        if expr[i] == "(":
+            depth += 1
+        elif expr[i] == ")":
+            depth -= 1
+        i += 1
+    if depth != 0:
+        return expr, False  # unbalanced; bail
+    close_paren = i - 1  # position of the matching ')'
+    inner_args = expr[arg_start:close_paren].rstrip()
+    sep = "" if inner_args.endswith(",") else ", "
+    rewritten = (
+        expr[:arg_start] + inner_args + sep + "mode=Mode.PRIVATE" + expr[close_paren:]
+    )
+    return rewritten, True
+
+
 def _to_builder_lines(
     u: TranslationUnit, body_var: str
 ) -> tuple[list[str], set[str]] | None:
@@ -1238,6 +1283,33 @@ def _to_builder_lines(
                     return [f"add({c})" for c in copies], {"add"}
         # Generic additive composition (mirror, etc.).
         return [f"add({rhs})"], {"add"}
+
+    # Direct ``var = _pattern_union(<base>, copy1, copy2, ...)``. Used by
+    # the Mirror feature and any additive pattern that emits through the
+    # ``_pattern_union`` helper without a leading composition. The base is
+    # already in the running part (because ``_pattern_union`` is the body's
+    # final aggregate), so we drop the wrapper and emit one ``add(copyN)``
+    # per copy.
+    #
+    # Inner extrudes inside wrapping calls (e.g. ``mirror(extrude(...),
+    # about=...)``) need ``mode=Mode.PRIVATE`` so the extrude's Mode.ADD
+    # side effect doesn't add the source prism *again* inside the BuildPart
+    # context (the source was added by an earlier Pad in the same body).
+    m = _PATTERN_UNION_RE.match(line)
+    if m:
+        full_call = line.split("=", 1)[1].strip()
+        inner = full_call[len("_pattern_union("):-1]
+        args = _split_top_level_args(inner)
+        if len(args) >= 2:
+            copies = [a.strip() for a in args[1:]]
+            out_lines: list[str] = []
+            extra_imports: set[str] = {"add"}
+            for c in copies:
+                c_with_private, used_private = _inject_private_mode_in_inner_extrude(c)
+                if used_private:
+                    extra_imports.add("Mode")
+                out_lines.append(f"add({c_with_private})")
+            return out_lines, extra_imports
 
     # Chained subtractive: ``var = base - rhs``.
     m = _CHAINED_SUB_RE.match(line)
