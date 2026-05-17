@@ -16,6 +16,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "pytest-xdist",
     "ruff",
 ]
 
@@ -28,3 +29,9 @@ packages = ["src/fcstd2b123d"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Parallel test execution via pytest-xdist. ``-n auto`` matches CPU count;
+# subprocess-per-test FreeCAD calls are the dominant cost in the corpus
+# suite (#123), so parallelising at the pytest level gives a near-linear
+# speedup on multi-core machines. CI runs on 2-core runners so the
+# speedup there is ~40%; locally on more cores it's larger.
+addopts = "-n auto"
