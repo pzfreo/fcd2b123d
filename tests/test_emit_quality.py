@@ -34,9 +34,10 @@ def test_polar_pattern_uses_polar_locations() -> None:
     term (algebra-mode multiplier), not six chained ``Rot(Z=k·60) * ...``
     terms.
 
-    Algebra-mode emit uses ``base - PolarLocations(0, n, ...) * prism``;
-    builder-mode emit (#78, future) would use ``with PolarLocations(...):``.
-    Either is acceptable.
+    After PR #111 (algebra-mode absorption), this fixture's emit should
+    use the absorbed ``PolarLocations(R, N)`` form (where R is the
+    sketch's offset radius and N is the total occurrences) — not the
+    pre-absorption ``PolarLocations(0, N-1, start_angle=θ, ...)`` form.
     """
     source = _translate("tests/fixtures/tier4_patterns/polar_pattern_holes.FCStd")
     assert "PolarLocations(" in source, (
@@ -48,24 +49,165 @@ def test_polar_pattern_uses_polar_locations() -> None:
     assert rot_z_lines == 0, (
         f"expected no Rot(Z=) terms in polar-pattern emit; found {rot_z_lines}"
     )
+    # PR #111 absorption: the emit should use the ``PolarLocations(18, 6)``
+    # form. Detect the absorbed shape by checking for ``PolarLocations(18``
+    # (R=18) — and confirm the unabsorbed ``PolarLocations(0,`` form is gone.
+    assert "PolarLocations(18" in source, (
+        "expected the absorbed `PolarLocations(R, N)` form (R=18 lifted "
+        "from the sketch's Pos(18, 0)); emit still uses the unabsorbed "
+        "`PolarLocations(0, N-1, start_angle=...)` workaround form"
+    )
+    assert "PolarLocations(0," not in source, (
+        "the pre-absorption `PolarLocations(0, N-1, ...)` form should be "
+        "gone — pattern absorption (#111) should collapse it"
+    )
 
 
 def test_linear_pattern_uses_locations() -> None:
-    """A uniform linear pattern should emit one ``Locations(...)`` (or
-    ``GridLocations``) term, not a chain of ``Pos(i·dx, 0, 0)`` factors."""
+    """A uniform linear pattern should emit ``GridLocations(dx, 0, N, 1)``
+    (the absorbed form after PR #112), not a chain of ``Pos(i·dx, 0, 0)``
+    factors or the raw ``Locations((x1,0,0), (x2,0,0), ...)`` enumeration."""
     source = _translate("tests/fixtures/tier4_patterns/linear_pattern_holes.FCStd")
-    assert "GridLocations(" in source or "Locations(" in source, (
-        "expected a Locations context; emit still spells out positions"
+    # PR #112 absorption: the emit should use the absorbed
+    # ``GridLocations(dx, 0, N, 1)`` form.
+    assert "GridLocations(" in source, (
+        "expected GridLocations(dx, 0, N, 1) form after PR #112 absorption; "
+        "emit still uses raw Locations enumeration"
     )
     # And the chained `Pos(i*dx, 0, 0) * extrude(...)` form should be gone.
     extrude_terms = source.count(" * extrude(")
-    # The body chain itself uses one ``extrude(...)`` per Pad/Pocket; the
-    # pattern should add exactly one more for the Locations multiplier.
-    # If the spelled-out form is still emitted, ``* extrude(`` appears once
-    # per extra copy (3 for a 4-occurrence linear pattern).
     assert extrude_terms <= 1, (
         f"emit still chains extrudes via Pos; found {extrude_terms} ` * extrude(` terms"
     )
+
+
+# ---------------------------------------------------------------------------
+# Builder-mode body wrapping (#78 phase 2a) — regression gates
+# ---------------------------------------------------------------------------
+
+
+def test_builder_mode_wraps_body_in_buildpart() -> None:
+    """``--style=builder`` should wrap a body's feature chain in a
+    ``with BuildPart() as <body>:`` block, not emit the SSA cascade
+    ``pad = extrude(...); pocket = pad - extrude(...); ...``."""
+    import os
+    import subprocess
+
+    fc_py = os.environ.get("FCSTD2B123D_FREECAD_PYTHON")
+    if not fc_py:
+        pytest.skip("FCSTD2B123D_FREECAD_PYTHON not set")
+    fc_pp = os.environ.get("FCSTD2B123D_FREECAD_PYTHONPATH", "")
+    src_root = str(__import__("pathlib").Path(__file__).parent.parent / "src")
+    out = subprocess.run(
+        [fc_py, "-m", "fcstd2b123d", "--style", "builder",
+         "tests/fixtures/sample_2026/IgnusNutMount.FCStd"],
+        capture_output=True, text=True, check=False,
+        env={**os.environ, "PYTHONPATH": ":".join(p for p in (src_root, fc_pp) if p)},
+    )
+    assert out.returncode == 0, f"translate failed:\n{out.stderr}"
+    source = out.stdout
+    assert "with BuildPart() as" in source, (
+        "expected `with BuildPart() as <body>:` wrapping the body's "
+        "feature chain in builder mode"
+    )
+    # And the SSA-style cascade should NOT be present for the multi-
+    # feature body — no ``fillet_001 = fillet(_edges_at(fillet_0, ...))``
+    # rebinding.
+    assert "fillet_001 = fillet(_edges_at(fillet_0" not in source, (
+        "builder mode should NOT emit the SSA `fillet_NNN = fillet(_edges_at"
+        "(<prev>, ...)) ...` cascade — features should operate in place "
+        "on `<body>.part` inside the BuildPart context"
+    )
+
+
+def test_polar_pattern_absorbs_pocket_in_builder() -> None:
+    """Polar absorption in builder mode (PRs #107/#108/#110/#111).
+
+    Algebra absorption (#111) runs first and produces a single
+    ``polar_pattern = pad - PolarLocations(R, N) * extrude(Sketch()
+    + Circle(r), ...)`` line. Because that line contains an inline
+    ``Circle(...)`` (a context-aware build123d primitive), the
+    builder-mode body transform correctly bails on this specific
+    body — emitting the absorbed algebra form. Sketches in the rest
+    of the module still get BuildSketch treatment (the disc sketch
+    is the visible witness).
+    """
+    import os
+    import subprocess
+
+    fc_py = os.environ.get("FCSTD2B123D_FREECAD_PYTHON")
+    if not fc_py:
+        pytest.skip("FCSTD2B123D_FREECAD_PYTHON not set")
+    fc_pp = os.environ.get("FCSTD2B123D_FREECAD_PYTHONPATH", "")
+    src_root = str(__import__("pathlib").Path(__file__).parent.parent / "src")
+    out = subprocess.run(
+        [fc_py, "-m", "fcstd2b123d", "--style", "builder",
+         "tests/fixtures/tier4_patterns/polar_pattern_holes.FCStd"],
+        capture_output=True, text=True, check=False,
+        env={**os.environ, "PYTHONPATH": ":".join(p for p in (src_root, fc_pp) if p)},
+    )
+    assert out.returncode == 0, f"translate failed:\n{out.stderr}"
+    source = out.stdout
+    # Absorbed form must appear (R lifted to PolarLocations, N+1 instead
+    # of N-1 with start_angle workaround).
+    assert "PolarLocations(18, 6)" in source, (
+        "expected absorbed `PolarLocations(18, 6)` form; absorption "
+        "(PRs #107/#108/#110/#111) didn't fire"
+    )
+    # Sketches still get BuildSketch treatment.
+    assert "with BuildSketch() as disc:" in source, (
+        "Disc sketch should still emit as BuildSketch in builder mode "
+        "even when the body bails to algebra"
+    )
+    # The opaque unabsorbed form should NOT be present.
+    assert "PolarLocations(0, 5" not in source, (
+        "unabsorbed `PolarLocations(0, N-1, start_angle=...)` form "
+        "should be gone after absorption"
+    )
+    # Geometry equivalence is asserted by
+    # test_builder_and_algebra_emit_same_geometry — no need to re-exec
+    # here.
+
+
+def test_mirror_body_falls_back_to_algebra_in_builder() -> None:
+    """Mirror features in builder mode should fall back to algebra-style
+    emit for the body chain (PR #114). The exec'd geometry must still
+    match the algebra-mode result — that's the load-bearing assertion;
+    the form is secondary."""
+    import os
+    import subprocess
+
+    fc_py = os.environ.get("FCSTD2B123D_FREECAD_PYTHON")
+    if not fc_py:
+        pytest.skip("FCSTD2B123D_FREECAD_PYTHON not set")
+    fc_pp = os.environ.get("FCSTD2B123D_FREECAD_PYTHONPATH", "")
+    src_root = str(__import__("pathlib").Path(__file__).parent.parent / "src")
+    env = {**os.environ, "PYTHONPATH": ":".join(p for p in (src_root, fc_pp) if p)}
+    out = subprocess.run(
+        [fc_py, "-m", "fcstd2b123d", "--style", "builder",
+         "tests/fixtures/tier4_patterns/mirrored_tab.FCStd"],
+        capture_output=True, text=True, check=False, env=env,
+    )
+    assert out.returncode == 0, f"translate failed:\n{out.stderr}"
+    # Exec to confirm correctness (no NameError as in the pre-fix bug).
+    exec_out = subprocess.run(
+        [".venv/bin/python", "-c",
+         out.stdout + "\nprint('VOL:', result.volume)"],
+        capture_output=True, text=True, check=False,
+    )
+    assert exec_out.returncode == 0, (
+        f"mirror-in-builder exec failed (regression of PR #114):\n"
+        f"{exec_out.stderr[-300:]}"
+    )
+    for line in exec_out.stdout.splitlines():
+        if line.startswith("VOL:"):
+            vol = float(line.split()[1])
+            assert abs(vol - 3488.0) < 1e-6, (
+                f"mirror builder volume {vol} != expected 3488.0"
+            )
+            break
+    else:
+        pytest.fail("VOL: line not found in exec output")
 
 
 # ---------------------------------------------------------------------------
