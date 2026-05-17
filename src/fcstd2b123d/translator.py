@@ -210,25 +210,7 @@ def translate_with_context(
                 raise UnsupportedFeatureError(obj.TypeId, obj.Label)
             units.extend(handler(obj, ctx))
 
-    # Phase 1 (this PR's sibling) will implement emit=function and
-    # emit=class. For now only script is wired through; the other values
-    # raise a clear NotImplementedError so callers can confirm the CLI
-    # accepts them without yet relying on the behaviour.
-    if emit == "script":
-        pass  # default render_module path
-    elif emit == "function":
-        raise NotImplementedError(
-            "--emit=function is not yet implemented; expected with Phase 1 "
-            "of the family-extraction work. Today the tier-6 spreadsheet "
-            "path auto-selects function form when parameters are present."
-        )
-    elif emit == "class":
-        raise NotImplementedError(
-            "--emit=class is not yet implemented; expected with Phase 1 "
-            "of the family-extraction work. See "
-            "docs/design/family-extraction.md."
-        )
-    else:
+    if emit not in ("script", "function", "class"):
         raise ValueError(f"unknown emit value: {emit!r}")
 
     source = render_module(
@@ -237,6 +219,7 @@ def translate_with_context(
         parameters=ctx.parameters,
         doc_description=doc_description,
         shared_helpers=shared_helpers,
+        emit=emit,
     )
     return source, ctx
 

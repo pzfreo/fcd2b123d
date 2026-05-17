@@ -206,6 +206,7 @@ def render_module(
     parameters: object | None = None,
     doc_description: str | None = None,
     shared_helpers: bool = False,
+    emit: str = "script",
 ) -> str:
     """Render translation units into a complete build123d Python module.
 
@@ -249,6 +250,9 @@ def render_module(
             imports.add("Edge")
         if "_faces_at" in helpers:
             imports.add("Face")
+    # Class emit needs the standard build123d kwargs.
+    if emit == "class":
+        imports.update({"Align", "BasePartObject", "Mode", "RotationLike"})
     import_line = f"from build123d import {', '.join(sorted(imports))}"
     typing_import_line = (
         "from typing import Any"
@@ -286,6 +290,7 @@ def render_module(
             used_params = []
 
     docstring = _module_docstring(doc_description, source_path)
+    class_name = _derive_class_name(source_path, doc_description) if emit == "class" else None
     raw = (
         f"{docstring}\n"
         f"{import_line}\n"
@@ -293,7 +298,7 @@ def render_module(
         + (f"{runtime_import_line}\n" if runtime_import_line else "")
         + f"\n"
         + helper_block
-        + _assemble_body(body_lines, final_var, used_params)
+        + _assemble_body(body_lines, final_var, used_params, emit=emit, class_name=class_name)
     )
     return _format(_snake_case_pass(raw, label_map=label_map))
 
@@ -325,17 +330,41 @@ def _assemble_body(
     body_lines: list[str],
     final_var: str,
     used_params: list[tuple[str, float]],
+    *,
+    emit: str = "script",
+    class_name: str | None = None,
 ) -> str:
-    """Either wrap the body in a parametric function or leave it at module level.
+    """Wrap body lines in the requested top-level shape.
 
-    When ``used_params`` is non-empty (the model references Spreadsheet
-    aliases), wrap so a downstream consumer can call ``make_part(width=…)``
-    to produce a variant. Module-level ``result = make_part()`` keeps the
-    test-harness contract.
+    ``emit="script"`` (default) — leave body at module level with a
+    trailing ``result = <final_var>`` binding. When ``used_params`` is
+    non-empty, auto-wraps in ``def make_part(...)`` for back-compat
+    with the historical tier-6 behaviour. Test harness sees ``result``.
+
+    ``emit="function"`` — always wrap in ``def make_part(...)`` even
+    when no spreadsheet params are present.
+
+    ``emit="class"`` — wrap in a ``class <class_name>(BasePartObject)``
+    whose ``__init__`` accepts spreadsheet params plus
+    ``rotation`` / ``align`` / ``mode`` kwargs. Trailing
+    ``result = <class_name>()`` keeps the test harness contract.
     """
+    if emit == "class":
+        return _assemble_body_class(body_lines, final_var, used_params, class_name)
+    if emit == "function":
+        return _assemble_body_function(body_lines, final_var, used_params)
+    # default: script
     if not used_params:
         return "\n".join(body_lines) + f"\nresult = {final_var}\n"
+    return _assemble_body_function(body_lines, final_var, used_params)
 
+
+def _assemble_body_function(
+    body_lines: list[str],
+    final_var: str,
+    used_params: list[tuple[str, float]],
+) -> str:
+    """def make_part(<params>) wrapper. Empty signature when no params."""
     signature = ", ".join(f"{name}={format_value(v)}" for name, v in used_params)
     indented = "\n".join("    " + line if line.strip() else "" for line in body_lines)
     return (
@@ -347,6 +376,72 @@ def _assemble_body(
         f"\n"
         f"result = make_part()\n"
     )
+
+
+def _assemble_body_class(
+    body_lines: list[str],
+    final_var: str,
+    used_params: list[tuple[str, float]],
+    class_name: str | None,
+) -> str:
+    """Wrap body in ``class <class_name>(BasePartObject)`` with __init__
+    taking spreadsheet params plus the standard rotation/align/mode
+    kwargs. Trailing ``result = <class_name>()`` preserves the
+    harness's module-level ``result`` binding.
+    """
+    if not class_name:
+        raise ValueError("class emit requires a class_name")
+    # Indent the body under __init__'s 8 spaces (class + def = two
+    # 4-space scopes deep).
+    indented = "\n".join("        " + line if line.strip() else "" for line in body_lines)
+    # Build the __init__ signature: user params first, then standard build123d
+    # kwargs.
+    user_param_args = "".join(
+        f"        {name}: float = {format_value(v)},\n" for name, v in used_params
+    )
+    return (
+        f"class {class_name}(BasePartObject):\n"
+        f'    """Translated parametric design. Defaults match the source values."""\n'
+        f"\n"
+        f"    def __init__(\n"
+        f"        self,\n"
+        f"{user_param_args}"
+        f"        rotation: RotationLike = (0, 0, 0),\n"
+        f"        align: Align | tuple[Align, Align, Align] | None = None,\n"
+        f"        mode: Mode = Mode.ADD,\n"
+        f"    ):\n"
+        f"{indented}\n"
+        f"        super().__init__(\n"
+        f"            part={final_var}, rotation=rotation, align=align, mode=mode,\n"
+        f"        )\n"
+        f"\n"
+        f"\n"
+        f"result = {class_name}()\n"
+    )
+
+
+def _derive_class_name(source_path: Path | str, doc_description: str | None) -> str:
+    """Derive a PascalCase class name from the source filename stem.
+
+    The doc description is *not* used because FreeCAD doc Comments are
+    free-form (multi-line, may contain author info, license text, etc.)
+    and produce noisy class names. Filename stems are short, stable,
+    and human-controlled — sanitised to PascalCase preserves the user's
+    naming intent. Callers that want a different class name can rename
+    the emitted module.
+    """
+    import re as _re
+
+    candidate = Path(source_path).stem
+    # Split on non-alphanumeric. Each segment becomes a PascalCase token.
+    # Keep internal capitalisation when a segment is already mixed case
+    # (e.g. ISO4762 → ISO4762, not Iso4762).
+    parts = _re.findall(r"[A-Za-z0-9]+", candidate)
+    pascal = "".join(p[0].upper() + p[1:] for p in parts if p)
+    # Class names can't start with a digit — prepend "Part_" if needed.
+    if not pascal or not pascal[0].isalpha():
+        pascal = "Part_" + pascal
+    return pascal
 
 
 def _format(source: str) -> str:
