@@ -44,13 +44,15 @@ def main(argv: list[str] | None = None) -> int:
              "installed at runtime.",
     )
     parser.add_argument(
-        "--style", choices=["algebra", "builder"], default="algebra",
-        help="Emit style. 'algebra' (default) writes value-style sketch + "
-             "feature constructions (``var = Sketch() + plane * (...)``). "
-             "'builder' wraps sketches in ``with BuildSketch(plane) as var:`` "
-             "blocks (phase 1: sketches only — bodies still use algebra "
-             "emit, referencing the sketch variable normally). Aligns the "
-             "output style with build123d's bd_warehouse library.",
+        "--style", choices=["auto", "algebra", "builder"], default="auto",
+        help="Emit style. 'auto' (default) picks 'builder' for documents "
+             "with a single-body Pad/Pocket/Fillet chain, 'algebra' for "
+             "documents that don't suit BuildPart wrapping (multi-body, "
+             "top-level Part booleans, atomic Pads/Pockets, tier-6 "
+             "spreadsheet models). 'builder' forces ``with BuildPart() as "
+             "body:`` / ``with BuildSketch() as sketch:`` wrapping; "
+             "'algebra' forces value-style ``var = base - extrude(...)``. "
+             "Builder mode matches bd_warehouse practice.",
     )
     args = parser.parse_args(argv)
 

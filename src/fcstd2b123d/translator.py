@@ -60,6 +60,67 @@ def _names_owned_by_bodies(doc) -> set[str]:
     return owned
 
 
+def _auto_select_style(doc) -> str:
+    """Pick ``"algebra"`` or ``"builder"`` based on document structure.
+
+    Builder mode (``with BuildPart() as body: ...``) suits a single
+    PartDesign body with a Pad/Pocket/Fillet/etc. chain. It reads worse
+    for documents that have a fundamentally different shape — multi-body
+    assemblies, top-level Part workbench booleans, atomic Pads/Pockets
+    without an enclosing Body, or tier-6 parametric models that already
+    emit as ``def make_part(...):``.
+
+    This is the auto-fallback that runs when ``--style=auto`` (the new
+    default after #117). Returning ``"algebra"`` lets a category that
+    builder mode can't improve emit the same way it always did.
+    """
+    bodies = [o for o in doc.Objects if o.TypeId == "PartDesign::Body"]
+    if len(bodies) > 1:
+        return "algebra"  # multi-body — algebra composes bodies honestly
+
+    boolean_types = {"Part::Cut", "Part::Fuse", "Part::Common"}
+    if any(o.TypeId in boolean_types for o in doc.Objects):
+        return "algebra"  # top-level Part booleans read better as a - b
+
+    # Atomic Pads/Pockets/Revolutions not enclosed in a Body. These get
+    # emitted as ``var = base - extrude(...)`` style; a BuildPart wrap
+    # would add indentation without clarity.
+    owned = _names_owned_by_bodies(doc)
+    atomic_pd_types = {
+        "PartDesign::Pad", "PartDesign::Pocket",
+        "PartDesign::Revolution", "PartDesign::Groove",
+    }
+    if any(
+        o.TypeId in atomic_pd_types and o.Name not in owned
+        for o in doc.Objects
+    ):
+        return "algebra"
+
+    # Tier-6 spreadsheet-driven models already render as
+    # ``def make_part(width=..., ...):`` — the function wrapper makes
+    # the body short enough that algebra reads fine.
+    if any(o.TypeId == "Spreadsheet::Sheet" for o in doc.Objects):
+        return "algebra"
+
+    # Sketches containing ellipses with non-zero center or rotation are
+    # not yet supported by builder-mode sketch emit — the BuildSketch
+    # wrapper loses the Pos/Rot placement (#117 future work). Fall back
+    # to algebra for these until builder-mode ellipse handling lands.
+    for o in doc.Objects:
+        if o.TypeId != "Sketcher::SketchObject":
+            continue
+        for g in getattr(o, "Geometry", []):
+            if type(g).__name__ != "Ellipse":
+                continue
+            import math as _math
+            cx, cy = g.Center.x, g.Center.y
+            ang = _math.degrees(getattr(g, "AngleXU", 0.0))
+            if abs(cx) > 1e-6 or abs(cy) > 1e-6 or abs(ang) > 1e-6:
+                return "algebra"
+
+    return "builder"
+
+
 def _names_used_as_sweep_spines(doc) -> set[str]:
     """Names of objects referenced as ``Spine`` by a ``Part::Sweep``.
 
@@ -83,28 +144,39 @@ def _names_used_as_sweep_spines(doc) -> set[str]:
 def translate_with_context(
     fcstd_path: Path | str,
     shared_helpers: bool = False,
-    style: str = "algebra",
+    style: str = "auto",
 ) -> tuple[str, TranslationContext]:
     """Translate an .FCStd file. Return (build123d_source, context).
 
     ``shared_helpers``: when True, the emit imports helpers from
     ``fcstd2b123d.runtime`` instead of inlining them.
 
-    ``style``: ``"algebra"`` (default) emits value-style
-    ``var = Sketch() + plane * (...)`` and ``var = base - extrude(...)``
-    constructions. ``"builder"`` emits builder-mode
-    ``with BuildSketch(plane) as var: ...`` blocks (phase 1: sketches
-    only — Pad / Pocket / etc. continue to use algebra emit, but
-    reference the sketch variable normally because the builder emit
-    rebinds ``var = var.sketch`` after exiting the context).
+    ``style``: emit style.
+      * ``"auto"`` (default): pick ``"builder"`` when the document
+        suits it (single-body Pad/Pocket/Fillet chain), ``"algebra"``
+        when it doesn't (multi-body, top-level Part booleans,
+        atomic Pads/Pockets, tier-6 spreadsheet models). See
+        ``_auto_select_style`` for the detection rules.
+      * ``"algebra"``: always emit value-style
+        ``var = Sketch() + plane * (...)`` and
+        ``var = base - extrude(...)`` constructions.
+      * ``"builder"``: always emit ``with BuildPart() as body:`` /
+        ``with BuildSketch() as sketch:`` blocks. Falls back to
+        algebra on a *per-body* basis when builder semantics can't
+        be expressed cleanly (e.g. some pattern shapes); document
+        structure detection from ``"auto"`` is not re-run.
     """
     path = Path(fcstd_path)
-    ctx = TranslationContext(
-        source_path=path, freecad_version=freecad_version(), style=style
-    )
     units: list[TranslationUnit] = []
     doc_description: str | None = None
     with open_document(path) as doc:
+        # Resolve auto inside the open_document block so we don't pay
+        # the ~700ms FreeCAD doc-load cost twice.
+        if style == "auto":
+            style = _auto_select_style(doc)
+        ctx = TranslationContext(
+            source_path=path, freecad_version=freecad_version(), style=style
+        )
         # Tier-6: pull parameters from Spreadsheet(s) before geometry walk.
         # Handlers consult ctx.parameters when emitting property values.
         ctx.parameters = extract_parameters(doc)
@@ -147,7 +219,7 @@ def translate_with_context(
 def translate(
     fcstd_path: Path | str,
     shared_helpers: bool = False,
-    style: str = "algebra",
+    style: str = "auto",
 ) -> str:
     """Translate an .FCStd file to build123d Python source (compat shim)."""
     source, _ctx = translate_with_context(
