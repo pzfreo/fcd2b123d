@@ -102,7 +102,37 @@ def discover_fixtures(
                         f"parameter {p.name!r}"
                     )
                 params[p.name] = _coerce_value(m.group(p.name), p.type)
-            # filename/spreadsheet/extrude_amount handled later if needed.
+            # spreadsheet/extrude_amount/lookup handled below or later.
+
+        # Lookup params: resolved from dimensions_table once the
+        # lookup_key value is known. (lookup_key is itself a filename
+        # param, already populated above.)
+        lookup_params = [p for p in manifest.parameters if p.source == "lookup"]
+        if lookup_params:
+            assert manifest.dimensions_table is not None
+            assert manifest.lookup_key is not None
+            key_value = params.get(manifest.lookup_key)
+            if key_value is None:
+                raise FamilyExtractionError(
+                    f"lookup_key {manifest.lookup_key!r} has no value for "
+                    f"{path.name}; cannot resolve lookup parameters"
+                )
+            # Stringify for the table (YAML keys may be int or str).
+            key_str = str(int(float(key_value))) if isinstance(key_value, (int, float)) else str(key_value)
+            if key_str not in manifest.dimensions_table:
+                raise FamilyExtractionError(
+                    f"dimensions_table has no entry for "
+                    f"{manifest.lookup_key}={key_str!r} (fixture {path.name}). "
+                    f"Available keys: {sorted(manifest.dimensions_table.keys())}"
+                )
+            row = manifest.dimensions_table[key_str]
+            for p in lookup_params:
+                if p.name not in row:
+                    raise FamilyExtractionError(
+                        f"dimensions_table[{key_str!r}] missing param {p.name!r}"
+                    )
+                params[p.name] = _coerce_value(str(row[p.name]), p.type)
+
         records.append(FixtureRecord(path=path, params=params))
     return records
 
@@ -313,7 +343,145 @@ def infer_substitution(
             left=ast.Name(id=name, ctx=ast.Load()),
             op=ast.Mult(), right=ast.Constant(value=2),
         )
+
+    # ---- Two-param forms: p1 ± p2 and p1/2 ± p2 (and their negations).
+    #
+    # I-beam corners need these (h/2 - tf, tw/2 + r, etc.). Tries every
+    # ordered pair of declared params.
+    def matches2(pred) -> tuple[str, str] | None:
+        for n1 in param_names:
+            for n2 in param_names:
+                if n1 == n2:
+                    continue
+                ok = True
+                for value, params in zip(values, params_per_fixture):
+                    p1 = params.get(n1)
+                    p2 = params.get(n2)
+                    if not isinstance(p1, (int, float)) or not isinstance(p2, (int, float)):
+                        ok = False
+                        break
+                    if not pred(value, float(p1), float(p2)):
+                        ok = False
+                        break
+                if ok:
+                    return n1, n2
+        return None
+
+    # p1 + p2 — useful when literal is the sum of two dimensions.
+    found = matches2(lambda v, a, b: abs(v - (a + b)) < tol)
+    if found:
+        n1, n2 = found
+        return _add(_name(n1), _name(n2))
+
+    # p1 - p2
+    found = matches2(lambda v, a, b: abs(v - (a - b)) < tol)
+    if found:
+        n1, n2 = found
+        return _sub(_name(n1), _name(n2))
+
+    # -(p1 + p2)
+    found = matches2(lambda v, a, b: abs(v + (a + b)) < tol)
+    if found:
+        n1, n2 = found
+        return _neg(_add(_name(n1), _name(n2)))
+
+    # -(p1 - p2)
+    found = matches2(lambda v, a, b: abs(v + (a - b)) < tol)
+    if found:
+        n1, n2 = found
+        return _neg(_sub(_name(n1), _name(n2)))
+
+    # p1/2 + p2 — e.g. tw/2 + r (web-edge to arc-center)
+    found = matches2(lambda v, a, b: abs(v - (a / 2 + b)) < tol)
+    if found:
+        n1, n2 = found
+        return _add(_half(n1), _name(n2))
+
+    # p1/2 - p2 — e.g. h/2 - tf (flange inner edge)
+    found = matches2(lambda v, a, b: abs(v - (a / 2 - b)) < tol)
+    if found:
+        n1, n2 = found
+        return _sub(_half(n1), _name(n2))
+
+    # -(p1/2 + p2)
+    found = matches2(lambda v, a, b: abs(v + (a / 2 + b)) < tol)
+    if found:
+        n1, n2 = found
+        return _neg(_add(_half(n1), _name(n2)))
+
+    # -(p1/2 - p2) — i.e. p2 - p1/2 mirrored
+    found = matches2(lambda v, a, b: abs(v + (a / 2 - b)) < tol)
+    if found:
+        n1, n2 = found
+        return _neg(_sub(_half(n1), _name(n2)))
+
+    # ---- Three-param forms: p1/2 ± p2 ± p3 (and their negations).
+    #
+    # I-beam arc-center y coordinates need h/2 - tf - r.
+    def matches3(pred) -> tuple[str, str, str] | None:
+        for n1 in param_names:
+            for n2 in param_names:
+                if n1 == n2:
+                    continue
+                for n3 in param_names:
+                    if n3 == n1 or n3 == n2:
+                        continue
+                    ok = True
+                    for value, params in zip(values, params_per_fixture):
+                        p1 = params.get(n1)
+                        p2 = params.get(n2)
+                        p3 = params.get(n3)
+                        if not all(isinstance(x, (int, float)) for x in (p1, p2, p3)):
+                            ok = False
+                            break
+                        if not pred(value, float(p1), float(p2), float(p3)):
+                            ok = False
+                            break
+                    if ok:
+                        return n1, n2, n3
+        return None
+
+    # p1/2 - p2 - p3 — h/2 - tf - r (I-beam arc-center y)
+    found = matches3(lambda v, a, b, c: abs(v - (a / 2 - b - c)) < tol)
+    if found:
+        n1, n2, n3 = found
+        return _sub(_sub(_half(n1), _name(n2)), _name(n3))
+
+    # -(p1/2 - p2 - p3)
+    found = matches3(lambda v, a, b, c: abs(v + (a / 2 - b - c)) < tol)
+    if found:
+        n1, n2, n3 = found
+        return _neg(_sub(_sub(_half(n1), _name(n2)), _name(n3)))
+
+    # p1/2 + p2 + p3 (rarer but symmetric for completeness)
+    found = matches3(lambda v, a, b, c: abs(v - (a / 2 + b + c)) < tol)
+    if found:
+        n1, n2, n3 = found
+        return _add(_add(_half(n1), _name(n2)), _name(n3))
+
+    # -(p1/2 + p2 + p3)
+    found = matches3(lambda v, a, b, c: abs(v + (a / 2 + b + c)) < tol)
+    if found:
+        n1, n2, n3 = found
+        return _neg(_add(_add(_half(n1), _name(n2)), _name(n3)))
+
     return None
+
+
+def _name(n: str) -> ast.Name:
+    return ast.Name(id=n, ctx=ast.Load())
+
+
+def _half(n: str) -> ast.BinOp:
+    return ast.BinOp(left=_name(n), op=ast.Div(), right=ast.Constant(value=2))
+
+
+def _add(a: ast.AST, b: ast.AST) -> ast.BinOp:
+    return ast.BinOp(left=a, op=ast.Add(), right=b)
+
+
+def _sub(a: ast.AST, b: ast.AST) -> ast.BinOp:
+    return ast.BinOp(left=a, op=ast.Sub(), right=b)
 
 
 def _neg(inner: ast.AST) -> ast.UnaryOp:

@@ -312,6 +312,92 @@ parameters:
     }
 
 
+def test_lookup_source_requires_dimensions_table() -> None:
+    msg = _bad("""
+family: my_family
+class_name: MyFamily
+standard:
+  ref: X
+fixture_glob: x
+filename_pattern: "F_(?P<size>\\\\d+)"
+parameters:
+  - name: size
+    source: filename
+  - name: b
+    source: lookup
+""")
+    assert "dimensions_table" in msg
+
+
+def test_dimensions_table_requires_lookup_param() -> None:
+    msg = _bad("""
+family: my_family
+class_name: MyFamily
+standard:
+  ref: X
+fixture_glob: x
+parameters:
+  - name: w
+    source: constant
+    default: 1
+dimensions_table:
+  "100":
+    something: 1
+""")
+    assert "no parameter has source=lookup" in msg
+
+
+def test_lookup_param_missing_from_table_row() -> None:
+    msg = _bad("""
+family: my_family
+class_name: MyFamily
+standard:
+  ref: X
+fixture_glob: x
+filename_pattern: "F_(?P<size>\\\\d+)"
+parameters:
+  - name: size
+    source: filename
+  - name: b
+    source: lookup
+dimensions_table:
+  "100":
+    not_b: 1
+""")
+    assert "missing lookup params" in msg
+
+
+def test_full_lookup_manifest_round_trip() -> None:
+    """A complete lookup-style manifest validates and exposes the
+    dimensions_table + lookup_key on the parsed object."""
+    text = """
+family: he_b_test
+class_name: HEBTest
+standard:
+  ref: DIN 1025-2
+fixture_glob: "HE-B_*.FCStd"
+filename_pattern: "HE-B_(?P<h>\\\\d+)"
+parameters:
+  - name: h
+    source: filename
+  - name: b
+    source: lookup
+  - name: tw
+    source: lookup
+dimensions_table:
+  "100":
+    b: 100
+    tw: 6.0
+  "200":
+    b: 200
+    tw: 9.0
+"""
+    manifest = parse_manifest_text(text)
+    assert manifest.dimensions_table is not None
+    assert "100" in manifest.dimensions_table
+    assert manifest.lookup_key == "h"  # defaults to first filename param
+
+
 def test_manifest_dataclasses_are_immutable() -> None:
     """FamilyManifest, StandardRef, ParameterDecl are frozen dataclasses."""
     manifest = parse_manifest_text("""
