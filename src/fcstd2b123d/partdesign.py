@@ -721,22 +721,45 @@ def _is_body_feature_unit(u: TranslationUnit) -> bool:
     """Heuristic: a body-feature unit is a single-line algebra assignment
     of one of the known body-chain shapes. Multi-line units (sketches with
     pre-lines, BuildSketch blocks) are NOT body features.
+
+    The shapes we recognise:
+
+    * ``<var> = extrude(...)`` — first Pad
+    * ``<var> = revolve(...)`` — first Revolution
+    * ``<var> = <base> + <rhs>`` — additive chain (Pad / Revolution / etc.)
+    * ``<var> = <base> - <rhs>`` — subtractive chain (Pocket / Pattern-via-Locations)
+    * ``<var> = fillet(...) | chamfer(...) | draft(...)`` — dressup
+    * ``<var> = _pattern_union(<base>, ...)`` — Mirror / additive pattern
+
+    Without the ``_pattern_union`` line, the Mirror feature's emit slips
+    through the body-unit filter, gets treated as a sketch-level unit,
+    and ends up outside the BuildPart context — but its expression
+    references a body-internal variable that no longer exists by name.
+    Recognising it here lets ``_to_builder_lines`` return None for the
+    line shape, bailing the whole body to algebra mode cleanly.
     """
     if len(u.lines) != 1:
         return False
     line = u.lines[0]
-    # Crude but effective: body features always assign to var_name from
-    # an expression starting with extrude(, revolve(, fillet(, chamfer(,
-    # draft(, _pattern_union(, or chain a prior solid via ``var = base ±``.
     if (
         _PAD_FIRST_RE.match(line)
         or _REVOL_FIRST_RE.match(line)
         or _CHAINED_ADD_RE.match(line)
         or _CHAINED_SUB_RE.match(line)
         or _DRESSUP_RE.match(line)
+        or _PATTERN_UNION_RE.match(line)
     ):
         return True
     return False
+
+
+# ``<var> = _pattern_union(<base>, <copy1>, <copy2>, ...)`` — the Mirror
+# feature and additive patterns (LinearPattern adding copies of a Pad)
+# emit through this helper because chained ``+`` on Part objects produces
+# a Compound rather than a fused solid.
+_PATTERN_UNION_RE = _re.compile(
+    r"^(\w+)\s*=\s*_pattern_union\(.*\)$", _re.DOTALL
+)
 
 
 # Build123d sketch primitives are context-aware: calling them inside a
