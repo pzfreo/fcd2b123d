@@ -44,20 +44,56 @@ def main(argv: list[str] | None = None) -> int:
              "installed at runtime.",
     )
     parser.add_argument(
-        "--style", choices=["auto", "algebra", "builder"], default="auto",
-        help="Emit style. 'auto' (default) picks 'builder' for documents "
-             "with a single-body Pad/Pocket/Fillet chain, 'algebra' for "
-             "documents that don't suit BuildPart wrapping (multi-body, "
-             "top-level Part booleans, atomic Pads/Pockets, tier-6 "
-             "spreadsheet models). 'builder' forces ``with BuildPart() as "
-             "body:`` / ``with BuildSketch() as sketch:`` wrapping; "
-             "'algebra' forces value-style ``var = base - extrude(...)``. "
-             "Builder mode matches bd_warehouse practice.",
+        "--emit", choices=["script", "function", "class"], default=None,
+        help="Module top-level shape. 'script' (current default) emits "
+             "module-level ``result = …``. 'function' emits ``def "
+             "make_part(...)`` (auto-selected today when the source has a "
+             "Spreadsheet). 'class' (becomes the new default once Phase 1 "
+             "of the family-extraction work ships) emits ``class Foo("
+             "BasePartObject)``. See docs/design/family-extraction.md.",
+    )
+    parser.add_argument(
+        "--body-style", choices=["auto", "algebra", "builder"],
+        default=None, dest="body_style",
+        help="API style inside the body. 'auto' (default) picks 'builder' "
+             "for documents with a single-body Pad/Pocket/Fillet chain, "
+             "'algebra' for documents that don't suit BuildPart wrapping. "
+             "'builder' / 'algebra' force the respective form.",
+    )
+    parser.add_argument(
+        "--style", choices=["auto", "algebra", "builder"], default=None,
+        help="DEPRECATED — use --body-style instead. Kept as a "
+             "back-compat shorthand; emits a warning when used.",
     )
     args = parser.parse_args(argv)
 
+    # Resolve the new --body-style flag from the legacy --style if needed,
+    # with a deprecation warning when --style is the source.
+    if args.body_style is None and args.style is not None:
+        import warnings
+        warnings.warn(
+            f"--style={args.style} is deprecated; use --body-style={args.style} instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        sys.stderr.write(
+            f"warning: --style is deprecated; use --body-style instead. "
+            f"Treating --style={args.style} as --body-style={args.style}.\n"
+        )
+        body_style = args.style
+    else:
+        body_style = args.body_style if args.body_style is not None else "auto"
+
+    # --emit default: 'script' for now (preserves today's behaviour). The
+    # family-extraction design (docs/design/family-extraction.md) plans to
+    # flip this to 'class' once Phase 1 ships class emission.
+    emit = args.emit if args.emit is not None else "script"
+
     source, ctx = translate_with_context(
-        args.input, shared_helpers=args.shared_helpers, style=args.style,
+        args.input,
+        shared_helpers=args.shared_helpers,
+        body_style=body_style,
+        emit=emit,
     )
     if args.output is None:
         sys.stdout.write(source)

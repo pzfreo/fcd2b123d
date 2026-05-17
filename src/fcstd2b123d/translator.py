@@ -144,38 +144,42 @@ def _names_used_as_sweep_spines(doc) -> set[str]:
 def translate_with_context(
     fcstd_path: Path | str,
     shared_helpers: bool = False,
-    style: str = "auto",
+    style: str | None = None,
+    body_style: str | None = None,
+    emit: str = "script",
 ) -> tuple[str, TranslationContext]:
     """Translate an .FCStd file. Return (build123d_source, context).
 
     ``shared_helpers``: when True, the emit imports helpers from
     ``fcstd2b123d.runtime`` instead of inlining them.
 
-    ``style``: emit style.
-      * ``"auto"`` (default): pick ``"builder"`` when the document
-        suits it (single-body Pad/Pocket/Fillet chain), ``"algebra"``
-        when it doesn't (multi-body, top-level Part booleans,
-        atomic Pads/Pockets, tier-6 spreadsheet models). See
-        ``_auto_select_style`` for the detection rules.
-      * ``"algebra"``: always emit value-style
-        ``var = Sketch() + plane * (...)`` and
-        ``var = base - extrude(...)`` constructions.
-      * ``"builder"``: always emit ``with BuildPart() as body:`` /
-        ``with BuildSketch() as sketch:`` blocks. Falls back to
-        algebra on a *per-body* basis when builder semantics can't
-        be expressed cleanly (e.g. some pattern shapes); document
-        structure detection from ``"auto"`` is not re-run.
+    ``body_style``: API style inside the body — ``"auto"`` (default,
+    picks builder/algebra per document via ``_auto_select_style``),
+    ``"algebra"``, or ``"builder"``. See the family-extraction design
+    doc for the rationale on splitting body-style from emit shape.
+
+    ``emit``: module top-level shape — ``"script"`` (default; emits
+    ``result = …``), ``"function"`` (``def make_part(...)``),
+    ``"class"`` (``class Foo(BasePartObject)``). Phase 1 of the
+    family-extraction work flips the default to ``"class"``.
+
+    ``style``: deprecated alias for ``body_style``. Accepted for
+    back-compat; will be removed in a future major version.
     """
+    # Back-compat: --style maps to body_style if body_style isn't set.
+    if body_style is None:
+        body_style = style if style is not None else "auto"
+
     path = Path(fcstd_path)
     units: list[TranslationUnit] = []
     doc_description: str | None = None
     with open_document(path) as doc:
         # Resolve auto inside the open_document block so we don't pay
         # the ~700ms FreeCAD doc-load cost twice.
-        if style == "auto":
-            style = _auto_select_style(doc)
+        if body_style == "auto":
+            body_style = _auto_select_style(doc)
         ctx = TranslationContext(
-            source_path=path, freecad_version=freecad_version(), style=style
+            source_path=path, freecad_version=freecad_version(), style=body_style
         )
         # Tier-6: pull parameters from Spreadsheet(s) before geometry walk.
         # Handlers consult ctx.parameters when emitting property values.
@@ -205,6 +209,27 @@ def translate_with_context(
             if handler is None:
                 raise UnsupportedFeatureError(obj.TypeId, obj.Label)
             units.extend(handler(obj, ctx))
+
+    # Phase 1 (this PR's sibling) will implement emit=function and
+    # emit=class. For now only script is wired through; the other values
+    # raise a clear NotImplementedError so callers can confirm the CLI
+    # accepts them without yet relying on the behaviour.
+    if emit == "script":
+        pass  # default render_module path
+    elif emit == "function":
+        raise NotImplementedError(
+            "--emit=function is not yet implemented; expected with Phase 1 "
+            "of the family-extraction work. Today the tier-6 spreadsheet "
+            "path auto-selects function form when parameters are present."
+        )
+    elif emit == "class":
+        raise NotImplementedError(
+            "--emit=class is not yet implemented; expected with Phase 1 "
+            "of the family-extraction work. See "
+            "docs/design/family-extraction.md."
+        )
+    else:
+        raise ValueError(f"unknown emit value: {emit!r}")
 
     source = render_module(
         units,

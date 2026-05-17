@@ -45,7 +45,12 @@ def _freecad_python() -> str:
     return p
 
 
-def _translate(fcstd_path: Path, style: str | None = None) -> str:
+def _translate(
+    fcstd_path: Path,
+    style: str | None = None,
+    body_style: str | None = None,
+    emit: str | None = None,
+) -> str:
     py = _freecad_python()
     fc_pythonpath = os.environ.get("FCSTD2B123D_FREECAD_PYTHONPATH", "")
     # Make our `src/` reachable too, so `python -m fcstd2b123d` resolves.
@@ -56,6 +61,10 @@ def _translate(fcstd_path: Path, style: str | None = None) -> str:
     argv = [py, "-m", "fcstd2b123d", str(fcstd_path)]
     if style is not None:
         argv += ["--style", style]
+    if body_style is not None:
+        argv += ["--body-style", body_style]
+    if emit is not None:
+        argv += ["--emit", emit]
     result = subprocess.run(
         argv, capture_output=True, text=True, env=env, check=False,
     )
