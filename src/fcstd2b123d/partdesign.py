@@ -1932,7 +1932,12 @@ def _resolve_edge_midpoints(parent_shape, edge_names) -> list[tuple[float, float
 
 
 def _format_midpoints(midpoints: list[tuple[float, float, float]]) -> str:
-    return "[" + ", ".join(f"({vfmt(x, y, z)})" for x, y, z in midpoints) + "]"
+    # Midpoints are selectors for ``_edges_at`` which uses tol=1e-3.
+    # Rounding coordinates to 5 dp (precision 1e-5, 100x tighter than tol)
+    # is safe and produces dramatically more readable emit — long
+    # solver-computed values like ``7.786755965961233`` become ``7.78676``.
+    rounded = [(round(x, 5), round(y, 5), round(z, 5)) for x, y, z in midpoints]
+    return "[" + ", ".join(f"({vfmt(x, y, z)})" for x, y, z in rounded) + "]"
 
 
 def _dressup_unit(
