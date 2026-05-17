@@ -38,8 +38,15 @@ def test_polar_pattern_uses_polar_locations() -> None:
     use the absorbed ``PolarLocations(R, N)`` form (where R is the
     sketch's offset radius and N is the total occurrences) — not the
     pre-absorption ``PolarLocations(0, N-1, start_angle=θ, ...)`` form.
+
+    Explicit ``--style=algebra`` because this test asserts the algebra-
+    mode absorption shape. Builder-mode has its own pattern test
+    (``test_polar_pattern_uses_buildpart_in_builder``).
     """
-    source = _translate("tests/fixtures/tier4_patterns/polar_pattern_holes.FCStd")
+    source = _translate(
+        "tests/fixtures/tier4_patterns/polar_pattern_holes.FCStd",
+        style="algebra",
+    )
     assert "PolarLocations(" in source, (
         "expected a PolarLocations(...) term; emit still spells out copies"
     )
@@ -66,8 +73,13 @@ def test_polar_pattern_uses_polar_locations() -> None:
 def test_linear_pattern_uses_locations() -> None:
     """A uniform linear pattern should emit ``GridLocations(dx, 0, N, 1)``
     (the absorbed form after PR #112), not a chain of ``Pos(i·dx, 0, 0)``
-    factors or the raw ``Locations((x1,0,0), (x2,0,0), ...)`` enumeration."""
-    source = _translate("tests/fixtures/tier4_patterns/linear_pattern_holes.FCStd")
+    factors or the raw ``Locations((x1,0,0), (x2,0,0), ...)`` enumeration.
+
+    Explicit ``--style=algebra`` — see ``test_polar_pattern_uses_polar_locations``."""
+    source = _translate(
+        "tests/fixtures/tier4_patterns/linear_pattern_holes.FCStd",
+        style="algebra",
+    )
     # PR #112 absorption: the emit should use the absorbed
     # ``GridLocations(dx, 0, N, 1)`` form.
     assert "GridLocations(" in source, (
@@ -102,6 +114,66 @@ def test_plane_times_face_drops_redundant_parens() -> None:
     assert "* (\n    make_face(sketch_004_loop_0)" in source, (
         "compound face expressions with top-level `+` must keep parens "
         "to bind ``*`` correctly"
+    )
+
+
+# ---------------------------------------------------------------------------
+# #117 — builder is the default style for documents that suit it
+# ---------------------------------------------------------------------------
+
+
+def test_default_emit_uses_buildpart_for_single_body() -> None:
+    """The default emit (no ``--style`` flag) should use builder mode for
+    a single-body, multi-feature fixture — that's the case where builder
+    wrapping reads best and matches bd_warehouse practice. This locks in
+    the post-#117 default flip; if auto-detection regresses this fixture
+    to algebra, the gate fails.
+
+    IgnusNutMount: single PartDesign body, 6 sketches + 15 features
+    (Pad chain, multiple Pockets, fillets/chamfers). Canonical builder
+    case.
+    """
+    source = _translate("tests/fixtures/sample_2026/IgnusNutMount.FCStd")
+    assert "with BuildPart() as " in source, (
+        "default-style emit for a single-body fixture should use builder "
+        "mode (with BuildPart() as body:) post-#117; got algebra-style"
+    )
+
+
+def test_default_emit_picks_algebra_for_atomic_pocket() -> None:
+    """Hex cap screw shape: atomic Pad + atomic ThroughAll Pocket with no
+    enclosing Body. Auto-detection should pick algebra — wrapping these
+    in BuildPart adds indentation without clarity per the #117 out-of-
+    scope category.
+    """
+    source = _translate(
+        "tests/fixtures/tier3_corpus/ANSI-ASME-B18_2_1_Hex_Head_Cap_Screw_1_4-20x1.FCStd"
+    )
+    # Algebra form: pad / pocket / result = ... assignments. The helper
+    # definitions in the module preamble may contain `with BuildPart()`
+    # inside their function bodies; check that the *body-level* emit
+    # doesn't use it (no top-of-module `with BuildPart() as` block).
+    top_level_buildpart = any(
+        line.startswith("with BuildPart() as ")
+        for line in source.splitlines()
+    )
+    assert not top_level_buildpart, (
+        "atomic Pad / ThroughAll Pocket fixture should auto-pick algebra "
+        "style — got a top-level `with BuildPart() as` block"
+    )
+
+
+def test_default_emit_picks_algebra_for_top_level_boolean() -> None:
+    """Documents containing top-level Part::Cut / Part::Fuse / Part::Common
+    should auto-pick algebra — ``result = a - b`` reads better than the
+    BuildPart-wrap equivalent per the #117 out-of-scope category."""
+    source = _translate("tests/fixtures/tier5_booleans/wall_anchor.FCStd")
+    top_level_buildpart = any(
+        line.startswith("with BuildPart() as ")
+        for line in source.splitlines()
+    )
+    assert not top_level_buildpart, (
+        "top-level Part boolean fixture should auto-pick algebra style"
     )
 
 

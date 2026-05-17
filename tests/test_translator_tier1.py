@@ -45,7 +45,7 @@ def _freecad_python() -> str:
     return p
 
 
-def _translate(fcstd_path: Path) -> str:
+def _translate(fcstd_path: Path, style: str | None = None) -> str:
     py = _freecad_python()
     fc_pythonpath = os.environ.get("FCSTD2B123D_FREECAD_PYTHONPATH", "")
     # Make our `src/` reachable too, so `python -m fcstd2b123d` resolves.
@@ -53,9 +53,11 @@ def _translate(fcstd_path: Path) -> str:
     pythonpath = ":".join(p for p in (repo_src, fc_pythonpath) if p)
 
     env = {**os.environ, "PYTHONPATH": pythonpath}
+    argv = [py, "-m", "fcstd2b123d", str(fcstd_path)]
+    if style is not None:
+        argv += ["--style", style]
     result = subprocess.run(
-        [py, "-m", "fcstd2b123d", str(fcstd_path)],
-        capture_output=True, text=True, env=env, check=False,
+        argv, capture_output=True, text=True, env=env, check=False,
     )
     if result.returncode != 0:
         pytest.fail(

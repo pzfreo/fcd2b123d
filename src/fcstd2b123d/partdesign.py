@@ -1291,24 +1291,35 @@ def _to_builder_lines(
         # Generic additive composition (mirror, etc.).
         return [f"add({rhs})"], {"add"}
 
-    # Direct ``var = _pattern_union(<base>, copy1, copy2, ...)``. Used by
-    # the Mirror feature and any additive pattern that emits through the
-    # ``_pattern_union`` helper without a leading composition. The base is
-    # already in the running part (because ``_pattern_union`` is the body's
-    # final aggregate), so we drop the wrapper and emit one ``add(copyN)``
-    # per copy.
+    # Direct ``var = _pattern_union(<arg1>, <arg2>, ...)``. Two cases:
+    #
+    # (a) Mirror / additive pattern over an existing body feature.
+    #     ``arg1`` is a bare identifier referencing the prior body unit's
+    #     var (e.g. ``tab_001``). Drop ``arg1`` (it's already on the running
+    #     part) and emit ``add(argN)`` for the remaining copies.
+    #
+    # (b) TwoLengths Pad — first feature of a body.
+    #     ``arg1`` is an inline expression like ``extrude(profile, amount=6)``,
+    #     not a back-reference. There's no prior body content to skip;
+    #     every arg is a fresh prism that must be added.
     #
     # Inner extrudes inside wrapping calls (e.g. ``mirror(extrude(...),
     # about=...)``) need ``mode=Mode.PRIVATE`` so the extrude's Mode.ADD
     # side effect doesn't add the source prism *again* inside the BuildPart
-    # context (the source was added by an earlier Pad in the same body).
+    # context.
     m = _PATTERN_UNION_RE.match(line)
     if m:
         full_call = line.split("=", 1)[1].strip()
         inner = full_call[len("_pattern_union("):-1]
         args = _split_top_level_args(inner)
         if len(args) >= 2:
-            copies = [a.strip() for a in args[1:]]
+            first = args[0].strip()
+            # Bare identifier = back-reference to a prior body var (case
+            # a). Otherwise = inline expression (case b).
+            if first.isidentifier():
+                copies = [a.strip() for a in args[1:]]
+            else:
+                copies = [a.strip() for a in args]
             out_lines: list[str] = []
             extra_imports: set[str] = {"add"}
             for c in copies:
