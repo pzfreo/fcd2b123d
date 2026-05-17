@@ -1,13 +1,15 @@
-"""Validate the function-wrapped emit for parametric (tier-6) fixtures.
+"""Validate the parametric emit for tier-6 (spreadsheet-driven) fixtures.
 
 For files with a Spreadsheet driving property expressions, the translator
-emits ``def make_part(param1=…, param2=…, ...):`` so a downstream consumer
-can call ``make_part(width=50)`` and get a variant.
+exposes the cell names as parameters. With ``--emit=function`` it produces
+``def make_part(param1=…, ...):``; with ``--emit=class`` (the default
+since #128) it produces ``class Foo(BasePartObject): __init__(param1=…)``.
 
-This test confirms:
-1. Calling make_part() with defaults matches the FreeCAD-snapshotted geometry.
-2. Calling make_part(...) with overridden parameters changes the geometry
-   in the expected direction.
+This test covers:
+1. ``--emit=function`` still emits the ``make_part`` wrapper (back-compat).
+2. ``make_part(width=…)`` overrides scale geometry as expected.
+3. ``--emit=class`` (the default) takes the same params as ``__init__``
+   kwargs and produces equivalent geometry.
 """
 
 from __future__ import annotations
@@ -24,14 +26,17 @@ SPREADSHEET_BOX = Path("tests/fixtures/tier6_parametric/spreadsheet_box.FCStd")
 
 
 def test_parametric_emit_is_function_wrapped():
-    source = _translate(SPREADSHEET_BOX)
+    """``--emit=function`` produces the ``make_part`` wrapper."""
+    source = _translate(SPREADSHEET_BOX, emit="function")
     assert "def make_part(" in source, (
-        "Parametric file should emit a make_part function.\n\nSource:\n" + source
+        "Parametric file should emit a make_part function under --emit=function.\n\nSource:\n" + source
     )
     assert "result = make_part()" in source
 
 
 def test_parametric_defaults_match_snapshot():
+    """Default emit (now class) instantiated with defaults matches the
+    FreeCAD-snapshotted geometry."""
     source = _translate(SPREADSHEET_BOX)
     namespace: dict = {}
     exec(source, namespace)
@@ -45,10 +50,9 @@ def test_parametric_defaults_match_snapshot():
     )
 
 
-def test_parametric_override_scales_geometry():
-    """Doubling ``width`` should double the volume (for a box with two other
-    dimensions unchanged)."""
-    source = _translate(SPREADSHEET_BOX)
+def test_parametric_override_scales_geometry_function():
+    """Doubling ``width`` should double the volume — function-form emit."""
+    source = _translate(SPREADSHEET_BOX, emit="function")
     namespace: dict = {}
     exec(source, namespace)
 
@@ -60,4 +64,33 @@ def test_parametric_override_scales_geometry():
     assert wide_props.volume == pytest.approx(base_props.volume * 2, rel=1e-9), (
         f"Expected volume to double when width doubled: base={base_props.volume}, "
         f"wide={wide_props.volume}"
+    )
+
+
+def test_parametric_override_scales_geometry_class():
+    """Doubling ``width`` should double the volume — class-form emit
+    (the default since #128)."""
+    source = _translate(SPREADSHEET_BOX)
+    namespace: dict = {}
+    exec(source, namespace)
+
+    # The class is the only non-builtin uppercase-named binding produced
+    # by the emit. Find it dynamically so the test isn't coupled to the
+    # exact class name (derived from the source filename stem).
+    cls_candidates = [
+        v for k, v in namespace.items()
+        if k.startswith("Spreadsheet") and isinstance(v, type)
+    ]
+    assert cls_candidates, (
+        f"Expected a Spreadsheet*-named class in namespace; got "
+        f"{[k for k in namespace if not k.startswith('_')]}"
+    )
+    cls = cls_candidates[0]
+    base = cls()
+    wide = cls(width=50)
+    base_props = extract_build123d(base)
+    wide_props = extract_build123d(wide)
+    assert wide_props.volume == pytest.approx(base_props.volume * 2, rel=1e-9), (
+        f"Expected volume to double when width doubled (class form): "
+        f"base={base_props.volume}, wide={wide_props.volume}"
     )

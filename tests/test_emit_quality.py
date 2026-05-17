@@ -111,7 +111,16 @@ def test_plane_times_face_drops_redundant_parens() -> None:
     assert "make_face(sketch_004_loop_0) + make_face(sketch_004_loop_1)" in source, (
         "compound face expression should still be present"
     )
-    assert "* (\n    make_face(sketch_004_loop_0)" in source, (
+    # The parens around the compound expression are required for ``*``
+    # precedence. Body indentation varies by emit shape (4 spaces at
+    # module level, 8 inside __init__ when --emit=class), so accept
+    # either by checking for the precedence-binding paren structure
+    # itself rather than the exact whitespace.
+    import re as _re
+    paren_open_pattern = _re.compile(
+        r"\* \(\s+make_face\(sketch_004_loop_0\)", _re.MULTILINE
+    )
+    assert paren_open_pattern.search(source), (
         "compound face expressions with top-level `+` must keep parens "
         "to bind ``*`` correctly"
     )
@@ -741,24 +750,42 @@ def test_style_flag_emits_deprecation_warning() -> None:
     )
 
 
-def test_emit_class_not_yet_implemented() -> None:
-    """``--emit=class`` raises NotImplementedError until Phase 1 PR B
-    lands the behaviour. The CLI accepts the flag in PR A so that
-    callers can wire against the final shape early."""
-    import os
-    import subprocess
-
-    fc_py = os.environ.get("FCSTD2B123D_FREECAD_PYTHON")
-    if not fc_py:
-        pytest.skip("FCSTD2B123D_FREECAD_PYTHON not set")
-    fc_pp = os.environ.get("FCSTD2B123D_FREECAD_PYTHONPATH", "")
-    src_root = str(__import__("pathlib").Path(__file__).parent.parent / "src")
-    out = subprocess.run(
-        [fc_py, "-m", "fcstd2b123d", "--emit", "class",
-         "tests/fixtures/tier1_primitives/box_10x20x30.FCStd"],
-        capture_output=True, text=True, check=False,
-        env={**os.environ, "PYTHONPATH": ":".join(p for p in (src_root, fc_pp) if p)},
+def test_default_emit_is_class() -> None:
+    """The default emit shape (no ``--emit`` flag) is ``class`` — a
+    ``BasePartObject`` subclass with the standard rotation/align/mode
+    kwargs. Matches bd_warehouse's class-based parts library."""
+    source = _translate("tests/fixtures/tier1_primitives/box_10x20x30.FCStd")
+    assert "class Box10X20X30(BasePartObject):" in source or "class Box10x20x30(BasePartObject):" in source, (
+        f"expected `class Box10x20x30(BasePartObject):` in default emit; got:\n{source[:400]}"
     )
-    assert out.returncode != 0
-    assert "NotImplementedError" in out.stderr
-    assert "family-extraction" in out.stderr
+    assert "rotation: RotationLike = (0, 0, 0)" in source
+    assert "mode: Mode = Mode.ADD" in source
+    # And the test-harness contract is preserved.
+    assert "result = " in source
+
+
+def test_emit_class_handles_tier6_spreadsheet() -> None:
+    """Tier-6 fixtures with spreadsheet cells get their cells as
+    ``__init__`` kwargs of the generated class."""
+    source = _translate("tests/fixtures/tier6_corpus/Foot.FCStd")
+    # The Foot fixture's spreadsheet aliases pieb1, pieb4, pieb5 should
+    # appear as kwargs with their defaults.
+    assert "pieb1: float = 3.5" in source, (
+        f"expected pieb1 kwarg in __init__; got:\n{source[:600]}"
+    )
+    assert "pieb4: float = " in source
+    assert "pieb5: float = " in source
+    # And the class instance binds ``result`` at module level.
+    assert "result = Foot()" in source
+
+
+def test_emit_script_preserves_module_level_result() -> None:
+    """``--emit=script`` preserves the historical module-level ``result = …``
+    binding without a class wrapper."""
+    source = _translate(
+        "tests/fixtures/tier1_primitives/box_10x20x30.FCStd", emit="script"
+    )
+    assert "class " not in source.split('"""')[2], (  # ignore the docstring
+        "script emit should not contain a class definition"
+    )
+    assert "result = " in source

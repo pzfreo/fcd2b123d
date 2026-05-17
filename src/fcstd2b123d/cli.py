@@ -84,10 +84,10 @@ def main(argv: list[str] | None = None) -> int:
     else:
         body_style = args.body_style if args.body_style is not None else "auto"
 
-    # --emit default: 'script' for now (preserves today's behaviour). The
-    # family-extraction design (docs/design/family-extraction.md) plans to
-    # flip this to 'class' once Phase 1 ships class emission.
-    emit = args.emit if args.emit is not None else "script"
+    # --emit default: 'class' (matches bd_warehouse practice). Callers
+    # who want today's module-level ``result = ...`` script form pass
+    # ``--emit=script`` explicitly. See docs/design/family-extraction.md.
+    emit = args.emit if args.emit is not None else "class"
 
     source, ctx = translate_with_context(
         args.input,
