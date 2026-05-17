@@ -47,6 +47,24 @@ def _is_xy_plane(p) -> bool:
     )
 
 
+def _has_top_level_addsub(expr: str) -> bool:
+    """True if ``expr`` has a ``+`` or ``-`` at paren depth 0.
+
+    Used to decide whether ``Plane * <face_expr>`` needs parens around
+    ``<face_expr>``. A single function call like ``make_face(p)`` is safe
+    without parens; ``Circle(5) - Circle(2)`` is not.
+    """
+    depth = 0
+    for ch in expr:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch in "+-" and depth == 0:
+            return True
+    return False
+
+
 def _plane_expr(placement) -> str | None:
     """Return a build123d Plane(...) expression, or None for XY identity.
 
@@ -675,7 +693,13 @@ def _translate_sketch_algebra(sketch, ctx: TranslationContext) -> list[Translati
         # ``Sketch() +`` produces the same geometry and types correctly.
         imports.add("Plane")
         imports.add("Sketch")
-        full_expr = f"Sketch() + {plane} * ({face_expr})"
+        # Parenthesise face_expr only when it has a top-level ``+`` / ``-``
+        # (the only operators that interact badly with ``*``). For a single
+        # function call like ``make_face(profile)`` the parens are noise.
+        if _has_top_level_addsub(face_expr):
+            full_expr = f"Sketch() + {plane} * ({face_expr})"
+        else:
+            full_expr = f"Sketch() + {plane} * {face_expr}"
     else:
         full_expr = face_expr
 
