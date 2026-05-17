@@ -351,18 +351,6 @@ def _body_to_builder(
     if any(_has_inline_sketch_primitive(u.lines[0]) for u in body_units):
         return units
 
-    # If any body unit is a Pattern (Locations multiplier or
-    # _pattern_union), bail to algebra mode. The pattern emits embed
-    # ``extrude(<sketch>, ...)`` inside a larger expression. Inside a
-    # BuildPart context, ``extrude(...)`` has a *side effect* — it adds
-    # the produced prism to the running part — which corrupts the
-    # subsequent multiplication. Algebra-mode pattern emits don't have
-    # this problem because there's no running BuildPart context.
-    # Discovered while implementing phase 2b (#101 / #102) — see
-    # autonomous-decisions.md for the full investigation.
-    if any(_has_pattern_expr(u.lines[0]) for u in body_units):
-        return units
-
     inside_lines: list[str] = []
     inside_imports: set[str] = set()
     inside_helpers: set[str] = set()
@@ -381,6 +369,19 @@ def _body_to_builder(
         inside_imports.update(u.imports)
         inside_imports.update(new_imports)
         inside_helpers.update(u.helpers)
+
+    # Phase 2b: hoist pattern prisms out of the BuildPart context.
+    # Inside a BuildPart, ``extrude(<sketch>, ...)`` has a side effect —
+    # it adds the produced prism to the running part. That corrupts
+    # ``add(<Locations> * extrude(<sk>, A), mode=SUBTRACT)`` expressions
+    # because the extrude both adds *and* gets multiplied for subtraction.
+    # The fix: pre-compute the prism in a module-level variable, then
+    # iterate the multiplied list inside the BuildPart.
+    inside_lines, hoisted_prism_units, extra_imports = _hoist_pattern_prisms(
+        inside_lines, body_units
+    )
+    inside_imports |= extra_imports
+    sketch_units = list(sketch_units) + hoisted_prism_units
 
     body_var = body.Name
     header = f"with BuildPart() as {body_var}:"
@@ -464,18 +465,141 @@ def _has_inline_sketch_primitive(line: str) -> bool:
     return bool(_CONTEXT_AWARE_SKETCH_RE.search(line))
 
 
-# Pattern-expression detector: ``Locations(...) * extrude(...)``,
-# ``PolarLocations(...) * extrude(...)``, ``mirror(...)``, or
-# ``_pattern_union(...)``. Any of these inside a builder-mode body line
-# is unsafe — the ``extrude(...)`` arg side-effects the BuildPart, and
-# ``_pattern_union`` runs its own BuildPart internally which conflicts.
-_PATTERN_EXPR_RE = _re.compile(
-    r"\b(?:PolarLocations|GridLocations|Locations|mirror|_pattern_union)\("
-)
+# ---------------------------------------------------------------------------
+# Phase 2b: Hoist pattern prisms (#101 / #102)
+# ---------------------------------------------------------------------------
+#
+# Background: build123d's ``extrude(<sketch>, ...)`` inside a BuildPart
+# context has a *side effect* — it adds the produced prism to the running
+# part (Mode.ADD by default). The phase-2a emit for a pattern,
+#
+#     add(PolarLocations(...) * extrude(<sk>, A), mode=Mode.SUBTRACT)
+#
+# evaluates ``extrude(<sk>, A)`` while inside the context, so the prism
+# is added once *and* then the multiplied list is subtracted —
+# producing the wrong number of carves.
+#
+# Fix: pre-compute the prism in a module-level variable, then iterate the
+# multiplied list inside the BuildPart:
+#
+#     <sk>_prism = extrude(<sk>, A)              # module level, no side effect
+#     with BuildPart() as body:
+#         ...
+#         for s in PolarLocations(...) * <sk>_prism:
+#             add(s, mode=Mode.SUBTRACT)
+#
+# Detects these patterns in the converted ``inside_lines`` and rewrites
+# them. Pattern-free lines pass through unchanged.
+
+_LOCATIONS_NAMES = ("PolarLocations", "GridLocations", "Locations")
 
 
-def _has_pattern_expr(line: str) -> bool:
-    return bool(_PATTERN_EXPR_RE.search(line))
+def _parse_pattern_line(line: str) -> tuple[str, str, str, str] | None:
+    """Parse a line of the form ``add(<Locations>(...) * extrude(<sk>, amount=A), mode=Mode.SUBTRACT)``.
+
+    Returns ``(locations_expr, sketch_var, amount, mode_suffix)`` if matched,
+    else None. Handles nested parens in the Locations call (e.g.
+    ``Locations((14.66, 0, 0), (29.33, 0, 0))``) which a naive regex can't.
+
+    ``mode_suffix`` is the literal text of the ``mode=Mode.SUBTRACT`` arg
+    (currently always ``"Mode.SUBTRACT"`` — only subtract patterns hit
+    this path).
+    """
+    s = line.strip()
+    if not (s.startswith("add(") and s.endswith(")")):
+        return None
+    inner = s[len("add("):-1]
+    # Split top-level args of add(): expect 2 args (the shape expr + mode kwarg).
+    args = _split_top_level_args(inner)
+    if len(args) != 2:
+        return None
+    shape_expr = args[0].strip()
+    mode_arg = args[1].strip()
+    if not mode_arg.startswith("mode="):
+        return None
+    mode_val = mode_arg[len("mode="):].strip()
+    if mode_val != "Mode.SUBTRACT":
+        return None
+
+    # shape_expr should be "<Locations>(...) * extrude(<sk>, amount=A)".
+    # Find the top-level "*" splitting Locations from extrude.
+    depth = 0
+    star_idx = -1
+    for i, ch in enumerate(shape_expr):
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        elif ch == "*" and depth == 0:
+            star_idx = i
+            break
+    if star_idx < 0:
+        return None
+    left = shape_expr[:star_idx].strip()
+    right = shape_expr[star_idx + 1:].strip()
+    if not any(left.startswith(name + "(") for name in _LOCATIONS_NAMES):
+        return None
+    if not left.endswith(")"):
+        return None
+    if not (right.startswith("extrude(") and right.endswith(")")):
+        return None
+
+    # Parse extrude(<sk>, amount=A) — args of extrude.
+    extrude_inner = right[len("extrude("):-1]
+    ex_args = _split_top_level_args(extrude_inner)
+    if len(ex_args) != 2:
+        return None
+    sketch_var = ex_args[0].strip()
+    amount_arg = ex_args[1].strip()
+    if not amount_arg.startswith("amount="):
+        return None
+    amount = amount_arg[len("amount="):].strip()
+    return left, sketch_var, amount, mode_val
+
+
+def _hoist_pattern_prisms(
+    inside_lines: list[str], body_units: list[TranslationUnit]
+) -> tuple[list[str], list[TranslationUnit], set[str]]:
+    """Rewrite pattern lines to use a hoisted prism. See module-level
+    comment block above for the why."""
+    new_lines: list[str] = []
+    hoisted: list[TranslationUnit] = []
+    hoisted_names: set[str] = set()
+    extra_imports: set[str] = set()
+
+    for line in inside_lines:
+        parsed = _parse_pattern_line(line)
+        if parsed is None:
+            new_lines.append(line)
+            continue
+        locations_expr, sketch_var, amount, _mode = parsed
+
+        prism_var = f"{sketch_var}_prism"
+        if prism_var not in hoisted_names:
+            hoisted_names.add(prism_var)
+            hoisted.append(
+                TranslationUnit(
+                    var_name=prism_var,
+                    label=prism_var,
+                    imports={"extrude"},
+                    lines=[f"{prism_var} = extrude({sketch_var}, amount={amount})"],
+                    comment=(
+                        f"Prism for ``{sketch_var}`` hoisted out of BuildPart "
+                        f"so it can be multiplied by the pattern locations "
+                        f"without triggering extrude's in-context side effect."
+                    ),
+                )
+            )
+            extra_imports.add("extrude")
+
+        # Replace the single add(...) line with a for-loop over the locations.
+        # ``add(s, mode=Mode.SUBTRACT)`` for an already-constructed shape
+        # is safe — no side effect.
+        new_lines.append(f"for s in {locations_expr} * {prism_var}:")
+        new_lines.append(f"    add(s, mode=Mode.SUBTRACT)")
+        extra_imports.add("add")
+
+    return new_lines, hoisted, extra_imports
 
 
 def _split_top_level_args(arglist: str) -> list[str]:
