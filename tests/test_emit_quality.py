@@ -120,6 +120,25 @@ def test_builder_mode_wraps_body_in_buildpart() -> None:
     )
 
 
+def test_arc_start_angle_normalised_to_0_360() -> None:
+    """``CenterArc(start_angle=...)`` should be normalised to [0, 360).
+
+    FreeCAD's ArcOfCircle stores FirstParameter as a raw radian value that
+    can exceed 2π (e.g. 514°). The start point depends only on
+    ``cos(start_angle)`` / ``sin(start_angle)`` (360-periodic), so wrapping
+    is geometry-preserving — and ``start_angle=154`` reads much better
+    than ``start_angle=514``.
+    """
+    source = _translate("tests/fixtures/sample_2026/DIN463_M14TabWasher.FCStd")
+    import re
+    for m in re.finditer(r"start_angle=(-?\d+(?:\.\d+)?)", source):
+        v = float(m.group(1))
+        assert 0 <= v < 360, (
+            f"start_angle={v} is outside [0, 360) — should be normalised "
+            f"for readability"
+        )
+
+
 def test_polar_pattern_absorbs_pocket_in_builder() -> None:
     """Polar absorption in builder mode (PRs #107/#108/#110/#111).
 
