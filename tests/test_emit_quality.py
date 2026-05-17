@@ -81,6 +81,30 @@ def test_linear_pattern_uses_locations() -> None:
     )
 
 
+def test_plane_times_face_drops_redundant_parens() -> None:
+    """``Plane * <single_call>`` should not be parenthesised — the parens
+    are noise around a function call that's already syntactically atomic.
+
+    Compound face expressions like ``make_face(a) + make_face(b)`` (with
+    a top-level ``+``) still get parens because they need them for the
+    ``*`` precedence to be correct.
+    """
+    source = _translate("tests/fixtures/sample_2026/housing-2-54mm-2p.FCStd")
+    # sketch_001 / 002 / 003 are single ``make_face(profile)`` — no parens.
+    assert "* make_face(sketch_001_profile)" in source, (
+        "expected `Plane * make_face(sketch_001_profile)` (single call, "
+        "no redundant parens)"
+    )
+    # sketch_004 is ``make_face(a) + make_face(b)`` — parens required.
+    assert "make_face(sketch_004_loop_0) + make_face(sketch_004_loop_1)" in source, (
+        "compound face expression should still be present"
+    )
+    assert "* (\n    make_face(sketch_004_loop_0)" in source, (
+        "compound face expressions with top-level `+` must keep parens "
+        "to bind ``*`` correctly"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Builder-mode body wrapping (#78 phase 2a) — regression gates
 # ---------------------------------------------------------------------------
