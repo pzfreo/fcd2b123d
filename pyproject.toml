@@ -11,6 +11,7 @@ dependencies = [
     "build123d",
     "numpy",
     "black",
+    "pyyaml",
 ]
 
 [project.optional-dependencies]
