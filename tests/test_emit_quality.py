@@ -212,11 +212,17 @@ def test_polar_pattern_absorbs_pocket_in_builder() -> None:
     # here.
 
 
-def test_mirror_body_falls_back_to_algebra_in_builder() -> None:
-    """Mirror features in builder mode should fall back to algebra-style
-    emit for the body chain (PR #114). The exec'd geometry must still
-    match the algebra-mode result — that's the load-bearing assertion;
-    the form is secondary."""
+def test_mirror_body_uses_buildpart_in_builder() -> None:
+    """Mirror features in builder mode should emit inside the BuildPart
+    block (issue #117, Bail #1 closed): ``with BuildPart() as body:`` plus
+    ``add(mirror(extrude(..., mode=Mode.PRIVATE), about=<plane>))``.
+
+    The inner extrude carries ``mode=Mode.PRIVATE`` so its in-context
+    Mode.ADD side effect doesn't double-add the source prism — the source
+    has already been added by an earlier Pad in the same body.
+
+    Geometric correctness verified by exec'ing the emit and asserting
+    volume; that's the load-bearing assertion."""
     import os
     import subprocess
 
@@ -232,15 +238,32 @@ def test_mirror_body_falls_back_to_algebra_in_builder() -> None:
         capture_output=True, text=True, check=False, env=env,
     )
     assert out.returncode == 0, f"translate failed:\n{out.stderr}"
-    # Exec to confirm correctness (no NameError as in the pre-fix bug).
+    source = out.stdout
+    # Builder form must wrap the body — was algebra-bail prior to #117.
+    assert "with BuildPart() as body:" in source, (
+        "expected `with BuildPart() as body:` wrap (issue #117 bail #1); "
+        "Mirror still bails the body to algebra"
+    )
+    # The Mirror feature should emit as ``add(mirror(...))`` inside the
+    # BuildPart. The inner extrude must carry ``mode=Mode.PRIVATE`` to
+    # suppress its in-context Mode.ADD side effect.
+    assert "add(mirror(" in source and "mode=Mode.PRIVATE" in source, (
+        "expected `add(mirror(extrude(..., mode=Mode.PRIVATE), about=...))` "
+        "inside the BuildPart block"
+    )
+    # And the previous algebra-bail signature must be gone.
+    assert "_pattern_union(" not in source, (
+        "_pattern_union helper should not appear in the emit — Mirror "
+        "is now handled in builder form"
+    )
+    # Exec to confirm geometric correctness.
     exec_out = subprocess.run(
         [".venv/bin/python", "-c",
-         out.stdout + "\nprint('VOL:', result.volume)"],
+         source + "\nprint('VOL:', result.volume)"],
         capture_output=True, text=True, check=False,
     )
     assert exec_out.returncode == 0, (
-        f"mirror-in-builder exec failed (regression of PR #114):\n"
-        f"{exec_out.stderr[-300:]}"
+        f"mirror-in-builder exec failed:\n{exec_out.stderr[-300:]}"
     )
     for line in exec_out.stdout.splitlines():
         if line.startswith("VOL:"):
