@@ -1,8 +1,20 @@
 # Derivative libraries strategy
 
-**Status**: draft / decision record
-**Last updated**: 2026-05-16
+**Status**: strategy doc — concrete architecture in `docs/design/family-extraction.md`
+**Last updated**: 2026-05-17
 **Audience**: project maintainers and future agents working on follow-on libraries
+
+> **Update (2026-05-17):** the steady-state workflow for generating
+> parametric build123d classes from the FreeCAD library is described
+> in [`docs/design/family-extraction.md`](../design/family-extraction.md)
+> (manifest-driven, deterministic, class-based output matching
+> `bd_warehouse`). This strategy doc remains the **strategic framing**
+> (what to build, why, what scope); the design doc covers the **how**.
+>
+> The hand-written-Python workflow described later in this doc was the
+> `bd-freecad-library` v0.x bootstrap. The steady state replaces
+> step 3 ("hand-write parametric Python") with translator output from
+> manifests.
 
 ## What this document is
 
