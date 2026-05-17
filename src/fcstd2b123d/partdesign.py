@@ -561,7 +561,13 @@ def _hoist_pattern_prisms(
     inside_lines: list[str], body_units: list[TranslationUnit]
 ) -> tuple[list[str], list[TranslationUnit], set[str]]:
     """Rewrite pattern lines to use a hoisted prism. See module-level
-    comment block above for the why."""
+    comment block above for the why. Also runs polar-absorption as a
+    post-pass: when a Pocket immediately precedes a polar for-loop on
+    the same prism, the two are collapsed into a single
+    ``PolarLocations(0, N+1) * prism`` loop that covers all positions
+    (the original Pocket's location at angle 0 is folded into the
+    pattern).
+    """
     new_lines: list[str] = []
     hoisted: list[TranslationUnit] = []
     hoisted_names: set[str] = set()
@@ -592,14 +598,118 @@ def _hoist_pattern_prisms(
             )
             extra_imports.add("extrude")
 
-        # Replace the single add(...) line with a for-loop over the locations.
-        # ``add(s, mode=Mode.SUBTRACT)`` for an already-constructed shape
-        # is safe — no side effect.
         new_lines.append(f"for s in {locations_expr} * {prism_var}:")
         new_lines.append(f"    add(s, mode=Mode.SUBTRACT)")
         extra_imports.add("add")
 
+    new_lines = _absorb_polar_original(new_lines)
     return new_lines, hoisted, extra_imports
+
+
+# Match an in-context Pocket extrude (the original carve before a Pattern).
+_EXTRUDE_SUBTRACT_RE = _re.compile(
+    r"^\s*extrude\(\s*(\w+)\s*,\s*amount=([^,]+?)\s*,\s*mode=Mode\.SUBTRACT\s*\)\s*$"
+)
+
+
+# Match a polar for-loop line emitted by ``_hoist_pattern_prisms`` so we
+# can detect ``Pocket + Pattern`` pairs for absorption.
+_POLAR_FOR_LOOP_RE = _re.compile(
+    r"^for s in PolarLocations\(\s*"
+    r"0\s*,\s*(\d+)\s*,\s*"
+    r"start_angle=([^,]+?)\s*,\s*"
+    r"angular_range=([^)]+?)\s*"
+    r"\)\s*\*\s*(\w+):\s*$"
+)
+
+
+def _absorb_polar_original(lines: list[str]) -> list[str]:
+    """Collapse ``Pocket + polar for-loop`` pairs into a single absorbed
+    polar for-loop covering all positions.
+
+    Pre-absorption (after the hoist pass):
+
+    ::
+
+        extrude(<sk>, amount=A, mode=Mode.SUBTRACT)              # original Pocket at angle 0
+        for s in PolarLocations(0, N, start_angle=θ, angular_range=R) * <sk>_prism:
+            add(s, mode=Mode.SUBTRACT)                            # 5 more rotated copies
+
+    Post-absorption (single loop covering N+1 positions at angles
+    0, step, 2·step, …, N·step):
+
+    ::
+
+        for s in PolarLocations(0, N+1) * <sk>_prism:
+            add(s, mode=Mode.SUBTRACT)
+
+    Validity check: ``start_angle ≈ step`` and ``angular_range ≈ N·step``
+    where ``step = 360/(N+1)``. Only collapses when both hold — refuses
+    to absorb partial / off-step patterns.
+    """
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        prev = lines[i]
+        m_extrude = _EXTRUDE_SUBTRACT_RE.match(prev)
+        if m_extrude is None or i + 1 >= len(lines):
+            out.append(prev)
+            i += 1
+            continue
+        sk_var, prev_amount = m_extrude.group(1), m_extrude.group(2).strip()
+        # Skip any interleaved comment lines.
+        j = i + 1
+        while j < len(lines) and lines[j].lstrip().startswith("#"):
+            j += 1
+        if j + 1 >= len(lines):
+            out.append(prev)
+            i += 1
+            continue
+        loop_header = lines[j]
+        loop_body = lines[j + 1]
+        m_polar = _POLAR_FOR_LOOP_RE.match(loop_header)
+        if m_polar is None:
+            out.append(prev)
+            i += 1
+            continue
+        try:
+            extra = int(m_polar.group(1))
+            start_angle = float(m_polar.group(2).strip())
+            angular_range = float(m_polar.group(3).strip())
+        except ValueError:
+            out.append(prev)
+            i += 1
+            continue
+        prism_var = m_polar.group(4)
+        if prism_var != f"{sk_var}_prism":
+            out.append(prev)
+            i += 1
+            continue
+        # Validate it's a uniform "skip the first" form.
+        total = extra + 1
+        expected_step = 360 / total
+        if (
+            abs(start_angle - expected_step) > 1e-6
+            or abs(angular_range - extra * expected_step) > 1e-6
+        ):
+            out.append(prev)
+            i += 1
+            continue
+        # Validate the body is add(s, mode=Mode.SUBTRACT) — anything else
+        # would be unexpected.
+        if loop_body.strip() != "add(s, mode=Mode.SUBTRACT)":
+            out.append(prev)
+            i += 1
+            continue
+
+        # Absorb. Carry forward any comments between the two original
+        # lines so the user can still see what features fed in.
+        out.extend(lines[i + 1 : j])
+        out.append(f"for s in PolarLocations(0, {total}) * {prism_var}:")
+        out.append(loop_body)
+        i = j + 2
+
+    return out
 
 
 def _split_top_level_args(arglist: str) -> list[str]:
