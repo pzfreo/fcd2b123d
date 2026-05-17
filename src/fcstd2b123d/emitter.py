@@ -18,12 +18,27 @@ def format_value(v) -> str:
     When ``v`` is a string, it's already a Python expression (typically a
     parameter name from tier-6 spreadsheet rewriting) — pass through.
 
-    For floats: snap FP-roundoff noise (``-19.999999999993534`` → ``-20``)
-    but never snap real computed values. The arc parameter ``270.000035`` is
-    a real solver-computed angle that lands near 270° to satisfy sketch
-    constraints; snapping it would shift the arc's endpoint by ~50 µm and
-    break closed-wire continuity. So: snap only at FP-roundoff scale
-    (≤ 1e-9 absolute, or 1e-12 relative).
+    For floats: snap FP-roundoff noise but never snap real computed values.
+    Two layers of snap, both at FP-roundoff scale (sub-nanometre shifts
+    that can't affect any geometric tolerance):
+
+    1. **Near-integer**: ``-19.999999999993534`` → ``-20``. Tight
+       relative tolerance (1e-12), works for any-magnitude integer.
+    2. **Near-N-decimal-place**: ``4.249999999941`` → ``4.25``,
+       ``4.222289999941`` → ``4.22229``. Used for values that aren't
+       near an integer — sketch coordinates often land at a few-decimal
+       value with FP-roundoff noise in trailing digits. Absolute
+       tolerance (1e-9) — only snaps when the noise is at the FP-
+       precision frontier, never the solver-shifted "55 vs 54.999978"
+       case (that one's handled coherently by
+       :mod:`fcstd2b123d.sketch_snap` instead, where shared endpoints
+       are tracked).
+
+    The solver-noise example from the original docstring (``270.000035``
+    landing near 270° to satisfy constraints) is **NOT** caught here —
+    its shift is too large (~3e-5 rel err) to be FP roundoff. It's
+    handled in the sketch-level snap pass (#43) which also propagates
+    the snap to coincident endpoints.
     """
     if isinstance(v, str):
         return v
@@ -33,6 +48,14 @@ def format_value(v) -> str:
     tol = max(1e-9, abs(v) * 1e-12)
     if abs(v - nearest) < tol:
         return f"{int(nearest)}"
+    # FP-roundoff snap for near-decimal-place values. Try rounding to
+    # 1..8 decimal places — the first that's within 1e-9 absolute is the
+    # snapped value. Stops at 8 places (FP precision frontier; rounding
+    # past that would just round to v itself).
+    for places in range(1, 9):
+        rounded = round(v, places)
+        if abs(v - rounded) < 1e-9 and rounded != v:
+            return repr(rounded)
     return repr(v)
 
 
