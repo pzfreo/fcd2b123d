@@ -163,17 +163,17 @@ def test_arc_start_angle_normalised_to_0_360() -> None:
         )
 
 
-def test_polar_pattern_absorbs_pocket_in_builder() -> None:
-    """Polar absorption in builder mode (PRs #107/#108/#110/#111).
+def test_polar_pattern_uses_buildpart_in_builder() -> None:
+    """Polar patterns in builder mode (#117 bail #2 closed): the body
+    should be wrapped in ``with BuildPart() as body:`` and emit the
+    pattern as ``for s in PolarLocations(R, N) * <prism>: add(s, ...)``.
 
-    Algebra absorption (#111) runs first and produces a single
-    ``polar_pattern = pad - PolarLocations(R, N) * extrude(Sketch()
-    + Circle(r), ...)`` line. Because that line contains an inline
-    ``Circle(...)`` (a context-aware build123d primitive), the
-    builder-mode body transform correctly bails on this specific
-    body — emitting the absorbed algebra form. Sketches in the rest
-    of the module still get BuildSketch treatment (the disc sketch
-    is the visible witness).
+    Before this fix, algebra absorption (PR #111) collapsed the pattern
+    into a single line containing inline ``Sketch() + Circle(r)``, which
+    is context-aware in build123d. ``_has_inline_sketch_primitive``
+    detected this and bailed the whole body to algebra. Skipping
+    absorption when ``--style=builder`` is selected lets the existing
+    ``_hoist_pattern_prisms`` path produce the clean for-loop form.
     """
     import os
     import subprocess
@@ -191,25 +191,35 @@ def test_polar_pattern_absorbs_pocket_in_builder() -> None:
     )
     assert out.returncode == 0, f"translate failed:\n{out.stderr}"
     source = out.stdout
-    # Absorbed form must appear (R lifted to PolarLocations, N+1 instead
-    # of N-1 with start_angle workaround).
-    assert "PolarLocations(18, 6)" in source, (
-        "expected absorbed `PolarLocations(18, 6)` form; absorption "
-        "(PRs #107/#108/#110/#111) didn't fire"
+    # Builder form must wrap the body (was algebra-bail before #117 fix).
+    assert "with BuildPart() as body:" in source, (
+        "expected `with BuildPart() as body:` wrap (issue #117 bail #2); "
+        "polar pattern still bails the body to algebra"
     )
-    # Sketches still get BuildSketch treatment.
-    assert "with BuildSketch() as disc:" in source, (
-        "Disc sketch should still emit as BuildSketch in builder mode "
-        "even when the body bails to algebra"
+    # The pattern emits as a for-loop over PolarLocations × hoisted prism.
+    assert "for s in PolarLocations(18, 6) * " in source, (
+        "expected `for s in PolarLocations(18, 6) * <prism>:` for-loop "
+        "form for the polar pattern in builder mode"
     )
-    # The opaque unabsorbed form should NOT be present.
+    assert "add(s, mode=Mode.SUBTRACT)" in source, (
+        "expected `add(s, mode=Mode.SUBTRACT)` inside the for-loop body"
+    )
+    # The pre-absorption (unabsorbed) ``PolarLocations(0, N-1, ...)``
+    # form should also be gone — `_hoist_pattern_prisms` runs absorption
+    # internally to land on the canonical N occurrences form.
     assert "PolarLocations(0, 5" not in source, (
         "unabsorbed `PolarLocations(0, N-1, start_angle=...)` form "
-        "should be gone after absorption"
+        "should be gone — the builder for-loop should use the absorbed "
+        "`PolarLocations(R, N)` form"
     )
-    # Geometry equivalence is asserted by
-    # test_builder_and_algebra_emit_same_geometry — no need to re-exec
-    # here.
+    # And the algebra absorption shape (single line with inline Circle)
+    # must not be present — that's what we replaced.
+    assert "PolarLocations(18, 6) * extrude(Sketch()" not in source, (
+        "the algebra-absorbed `PolarLocations(R, N) * extrude(Sketch() + "
+        "Circle(r), ...)` line should not appear in builder mode — "
+        "absorption is now skipped for builder, deferring to the "
+        "for-loop hoist path"
+    )
 
 
 def test_mirror_body_uses_buildpart_in_builder() -> None:

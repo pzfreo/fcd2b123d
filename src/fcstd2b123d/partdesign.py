@@ -241,14 +241,21 @@ def translate_body(body, ctx: TranslationContext) -> list[TranslationUnit]:
             # and offset-sketch units. The visible improvement is the same
             # one builder-mode gets via _move_offset_to_polar (#110), but
             # for the default algebra emit.
-            if tid == "PartDesign::PolarPattern":
-                units, current_var = _try_absorb_polar_algebra(
-                    child, units, current_var
-                )
-            elif tid == "PartDesign::LinearPattern":
-                units, current_var = _try_absorb_linear_algebra(
-                    child, units, current_var
-                )
+            # Skip algebra-mode absorption when ``--style=builder`` is
+            # selected (#117 bail #2). The absorbed line embeds an inline
+            # ``Sketch() + Circle(r)`` which is context-aware and breaks
+            # the BuildPart transform; the pre-absorption form handles
+            # patterns cleanly via the ``with PolarLocations(R, N):``
+            # builder-mode path in _hoist_pattern_prisms.
+            if getattr(ctx, "style", "algebra") != "builder":
+                if tid == "PartDesign::PolarPattern":
+                    units, current_var = _try_absorb_polar_algebra(
+                        child, units, current_var
+                    )
+                elif tid == "PartDesign::LinearPattern":
+                    units, current_var = _try_absorb_linear_algebra(
+                        child, units, current_var
+                    )
         else:
             raise UnsupportedFeatureError(
                 tid,
