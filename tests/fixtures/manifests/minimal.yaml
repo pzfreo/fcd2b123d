@@ -1,0 +1,15 @@
+# Minimal valid manifest for unit tests. Smallest fully-validated family.
+
+family: minimal_box
+class_name: MinimalBox
+
+standard:
+  ref: TEST-001
+
+fixture_glob: "tests/fixtures/tier1_primitives/box_*.FCStd"
+
+parameters:
+  - name: size
+    source: constant
+    type: float
+    default: 10
