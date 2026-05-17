@@ -225,6 +225,11 @@ def _emit_arc(g, reverse: bool) -> str:
         start_angle, arc_size = lpa, -sweep
     else:
         start_angle, arc_size = fpa, sweep
+    # Normalise start_angle to [0, 360). The CenterArc start point depends
+    # only on ``cos(start_angle)`` / ``sin(start_angle)`` (360-periodic),
+    # so wrapping doesn't change the geometry — but ``start_angle=154.62``
+    # reads much better than ``start_angle=514.62`` (raw FC value).
+    start_angle = start_angle % 360
     return (
         f"CenterArc(center=({_fmt(cx)}, {_fmt(cy)}), radius={_fmt(r)}, "
         f"start_angle={_fmt(start_angle)}, arc_size={_fmt(arc_size)})"
