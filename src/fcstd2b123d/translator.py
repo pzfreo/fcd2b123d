@@ -32,7 +32,7 @@ HANDLERS = {
 # Document-level infrastructure types — appear in valid documents but carry
 # no translatable content. Silently skipped at the top level.
 INFRASTRUCTURE_TYPES = {
-    "App::Origin", "App::Line", "App::Plane", "App::Part",
+    "App::Origin", "App::Line", "App::Plane", "App::Point", "App::Part",
     "App::DocumentObjectGroup",
     # PartDesign datums that appear at document level in some legacy files
     # (e.g. multi-Body mannequins). They're support frames for downstream
@@ -42,6 +42,11 @@ INFRASTRUCTURE_TYPES = {
     # via extract_parameters() before the main loop runs, so they don't
     # need a direct translation.
     "Spreadsheet::Sheet",
+    # Measure workbench annotations — viewport-only, no geometry to translate.
+    "Measure::MeasureLength",
+    "Measure::MeasureDistance",
+    "Measure::MeasureAngle",
+    "Measure::MeasureRadius",
 }
 
 
