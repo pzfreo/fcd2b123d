@@ -8,7 +8,11 @@ Sized for FDM at 0.2 mm layer height; increase clearance to 0.4 for less
 well-tuned printers, decrease to 0.2 for resin.
 """
 
-from build123d import Align, Box, Cylinder, Location
+from pathlib import Path
+
+from build123d import Align, Box, Compound, Cylinder, Location, export_step
+from OCP.BRep import BRep_Builder
+from OCP.TopoDS import TopoDS_Compound
 
 # ── parameters ───────────────────────────────────────────────────────────────
 leaf_length = 50      # mm, each paddle extends this far from the pin axis
@@ -50,4 +54,11 @@ leaf_b    = leaf_b + knuckle_b.move(Location((0, 0, z_b)))
 pin    = Cylinder(pin_r, total_h, align=(Align.CENTER, Align.CENTER, Align.MIN))
 leaf_b = leaf_b + pin
 
-result = leaf_a + leaf_b
+_builder = BRep_Builder()
+_occ = TopoDS_Compound()
+_builder.MakeCompound(_occ)
+for _solid in [*leaf_a.solids(), *leaf_b.solids()]:
+    _builder.Add(_occ, _solid.wrapped)
+
+result = Compound(_occ)
+export_step(result, Path(__file__).with_suffix(".step"))
