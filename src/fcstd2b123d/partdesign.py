@@ -1377,7 +1377,12 @@ def _translate_pad(
 
     length = _value(pad, "Length", ctx)
     reversed_ = bool(getattr(pad, "Reversed", False))
-    midplane = bool(getattr(pad, "Midplane", False))
+    # FreeCAD 1.0 introduced SideType="Symmetric" as the canonical way to
+    # request symmetric extrusion; older files used Midplane=True.  Both mean
+    # the same thing: extrude ±length/2 about the sketch plane (both=True).
+    midplane = bool(getattr(pad, "Midplane", False)) or (
+        str(getattr(pad, "SideType", "")) == "Symmetric"
+    )
 
     helpers: set[str] = set()
     imports = {"extrude"}
@@ -1411,7 +1416,7 @@ def _translate_pad(
         # plane → build123d's both=True with amount=length/2 produces the
         # same result.
         if midplane:
-            half = f"{length} / 2" if isinstance(length, str) else length / 2
+            half = f"({length}) / 2" if isinstance(length, str) else length / 2
             extrude_args = f"{sketch_var}, amount={format_value(half)}, both=True"
         else:
             amount = _negate(length) if reversed_ else length
@@ -1525,7 +1530,9 @@ def _translate_pocket(
         profile = profile[0]
     sketch_var = profile.Name
     reversed_ = bool(getattr(pocket, "Reversed", False))
-    midplane = bool(getattr(pocket, "Midplane", False))
+    midplane = bool(getattr(pocket, "Midplane", False)) or (
+        str(getattr(pocket, "SideType", "")) == "Symmetric"
+    )
 
     if pocket_type == "ThroughAll":
         length = _THROUGH_ALL_LENGTH
@@ -1554,7 +1561,7 @@ def _translate_pocket(
             length = _value(pocket, "Length", ctx)
             length_note = f"length={length}"
         if midplane:
-            half = f"{length} / 2" if isinstance(length, str) else length / 2
+            half = f"({length}) / 2" if isinstance(length, str) else length / 2
             line = (
                 f"{pocket.Name} = {base_var} - "
                 f"extrude({sketch_var}, amount={format_value(half)}, both=True)"
@@ -2288,7 +2295,7 @@ def _prism_expression(orig, ctx: TranslationContext):
         length = _value(orig, "Length", ctx)
 
     if midplane:
-        half = f"{length} / 2" if isinstance(length, str) else length / 2
+        half = f"({length}) / 2" if isinstance(length, str) else length / 2
         expr = f"extrude({sketch_var}, amount={format_value(half)}, both=True)"
     else:
         if tid == "PartDesign::Pad":
