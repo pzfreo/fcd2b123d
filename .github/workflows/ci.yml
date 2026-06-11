@@ -12,10 +12,10 @@ jobs:
     # auto-skip when FCSTD2B123D_FREECAD_PYTHON is unset.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           enable-cache: true
 
@@ -34,10 +34,10 @@ jobs:
     # source, exec()d in this env, properties compared to snapshots).
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           enable-cache: true
 
@@ -49,7 +49,7 @@ jobs:
 
       - name: Cache FreeCAD env
         id: freecad-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .conda
           # v2: added black (used by the emitter to format generated source)
