@@ -1363,11 +1363,21 @@ def _translate_pad(
     with the running body shape — that's how FreeCAD chains multiple Pads
     inside a Body (each adds material to the previous result).
     """
+    # FreeCAD 1.1 split the Pad's single Type enum in two: the direction count
+    # moved to SideType ("One side" / "Two sides" / "Symmetric") and Type now
+    # describes each side's limit on its own. A 1.0 file with Type='TwoLengths'
+    # opens in 1.1 as SideType='Two sides' with Type='Length', so read the
+    # two-sided intent from whichever of the two the file carries.
     pad_type = str(getattr(pad, "Type", "Length"))
-    if pad_type not in ("Length", "TwoLengths"):
+    side_type = str(getattr(pad, "SideType", ""))
+    two_lengths = pad_type == "TwoLengths" or side_type == "Two sides"
+    per_side_types = [pad_type] + ([str(getattr(pad, "Type2", "Length"))] if two_lengths else [])
+    unsupported = [s for s in per_side_types if s not in ("Length", "TwoLengths")]
+    if unsupported:
         raise UnsupportedFeatureError(
             pad.TypeId,
-            f"{pad.Label} (Pad.Type={pad.Type!r}; supports 'Length' / 'TwoLengths')",
+            f"{pad.Label} (Pad.Type={pad.Type!r}, Type2="
+            f"{getattr(pad, 'Type2', None)!r}; supports 'Length' on each side)",
         )
 
     profile = pad.Profile
@@ -1387,7 +1397,7 @@ def _translate_pad(
     helpers: set[str] = set()
     imports = {"extrude"}
 
-    if pad_type == "TwoLengths":
+    if two_lengths:
         # Forward by Length, backward by Length2 from the sketch plane.
         # Reversed flips both directions. Build two extrudes and fuse via
         # the BuildPart-backed union helper (same pattern as pattern emit).
@@ -1523,6 +1533,16 @@ def _translate_pocket(
             pocket.TypeId,
             f"{pocket.Label} (Pocket.Type={pocket_type!r}; tier-2 supports "
             f"'Length', 'ThroughAll', 'UpToFirst', 'UpToFace')",
+        )
+    # A two-sided Pocket cuts in both directions. Under FreeCAD 1.0 that was
+    # Type='TwoLengths' and the check above refused it; under 1.1 it is
+    # SideType='Two sides' with Type='Length', which would otherwise slip
+    # through and silently emit a one-sided cut.
+    if str(getattr(pocket, "SideType", "")) == "Two sides":
+        raise UnsupportedFeatureError(
+            pocket.TypeId,
+            f"{pocket.Label} (Pocket SideType='Two sides'; tier-2 cuts one "
+            f"side or Symmetric only)",
         )
 
     profile = pocket.Profile
@@ -2482,49 +2502,61 @@ def _quantity_value(q) -> float:
     return float(q.Value) if hasattr(q, "Value") else float(q)
 
 
+# FreeCAD 1.1 renamed the pattern Mode enumeration: 'length' (linear) and
+# 'angle' (polar) both became 'Extent', and 'offset' became 'Spacing'. The
+# semantics did not change, and the property the value is read from is
+# unchanged, so both vocabularies are accepted — the same file translates
+# identically whichever version last saved it.
+_EXTENT_MODES = frozenset({"length", "angle", "extent"})
+_SPACING_MODES = frozenset({"offset", "spacing"})
+
+
 def _linear_step(pat, occurrences: int) -> float:
     """Per-copy distance for a LinearPattern.
 
-    Mode='length': step = Length / (Occurrences - 1).
-    Mode='offset': step = Offset (per-copy distance set explicitly).
+    Extent (FreeCAD <=1.0: 'length'): step = Length / (Occurrences - 1).
+    Spacing (FreeCAD <=1.0: 'offset'): step = Offset, set explicitly.
     """
     if occurrences <= 1:
         return 0.0
-    mode = str(getattr(pat, "Mode", "length"))
-    if mode == "length":
+    mode = str(getattr(pat, "Mode", "Extent"))
+    if mode.lower() in _EXTENT_MODES:
         return _quantity_value(pat.Length) / (occurrences - 1)
-    if mode == "offset":
+    if mode.lower() in _SPACING_MODES:
         return _quantity_value(pat.Offset)
     raise UnsupportedFeatureError(
         pat.TypeId,
-        f"{pat.Label} (LinearPattern Mode={mode!r}; v1 supports 'length' / 'offset')",
+        f"{pat.Label} (LinearPattern Mode={mode!r}; v1 supports "
+        f"'Extent'/'length' and 'Spacing'/'offset')",
     )
 
 
 def _polar_step(pat, occurrences: int) -> float:
     """Per-copy angle (degrees) for a PolarPattern.
 
-    Mode='angle' with abs(Angle) ≈ 360°: full revolution → step = Angle / Occurrences.
-    Mode='angle' partial sweep:           last copy at Angle → step = Angle / (Occurrences - 1).
-    Mode='offset': step = Offset directly.
+    Extent (FreeCAD <=1.0: 'angle'), abs(Angle) ~ 360: full revolution, so the
+        last copy would land on the first → step = Angle / Occurrences.
+    Extent, partial sweep: the last copy sits at Angle → Angle / (Occurrences - 1).
+    Spacing (FreeCAD <=1.0: 'offset'): step = Offset directly.
 
-    Note ``pat.Offset`` is unreliable in Mode='angle' files (FreeCAD doesn't
+    Note ``pat.Offset`` is unreliable in Extent-mode files (FreeCAD doesn't
     update it when the user edits Angle / Occurrences), so we compute from
     the source-of-truth fields instead.
     """
     if occurrences <= 1:
         return 0.0
-    mode = str(getattr(pat, "Mode", "angle"))
-    if mode == "angle":
+    mode = str(getattr(pat, "Mode", "Extent"))
+    if mode.lower() in _EXTENT_MODES:
         angle = _quantity_value(pat.Angle)
         if abs(abs(angle) - 360.0) < _TOL:
             return angle / occurrences
         return angle / (occurrences - 1)
-    if mode == "offset":
+    if mode.lower() in _SPACING_MODES:
         return _quantity_value(pat.Offset)
     raise UnsupportedFeatureError(
         pat.TypeId,
-        f"{pat.Label} (PolarPattern Mode={mode!r}; v1 supports 'angle' / 'offset')",
+        f"{pat.Label} (PolarPattern Mode={mode!r}; v1 supports "
+        f"'Extent'/'angle' and 'Spacing'/'offset')",
     )
 
 
