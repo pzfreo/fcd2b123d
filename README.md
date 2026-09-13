@@ -33,7 +33,7 @@ test methodology, and ADRs are all in `SPEC.md` and `docs/adr/`.
 | 6 | Parameter preservation (`Spreadsheet::Sheet` aliases, `App::VarSet` variables) → function-wrapped emit | ✅ |
 | 7 | `PartDesign::Hole`, Sweep, Loft, Helix | not yet |
 
-**Test status:** 148 tests pass across two CI lanes (a fast lane for the
+**Test status:** 368 tests pass (1 skipped) across two CI lanes (a fast lane for the
 schema and comparison utility; a slower lane that runs the translator end-to-end
 against fixture files via a FreeCAD subprocess). Across 148 random Parts
 Library files sampled in five batches, **109 pass (~74%)** end-to-end with
