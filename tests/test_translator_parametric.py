@@ -94,3 +94,54 @@ def test_parametric_override_scales_geometry_class():
         f"Expected volume to double when width doubled (class form): "
         f"base={base_props.volume}, wide={wide_props.volume}"
     )
+
+
+# The VarSet twin of spreadsheet_box: FreeCAD 1.0 replaced the parameter
+# spreadsheet with App::VarSet, which holds its variables as dynamic
+# properties. No Parts Library file can stand in here — all 29 that use a
+# VarSet also carry Python feature types the translator refuses by design
+# (SPEC 13.5) — so this fixture is hand-built the same way spreadsheet_box is.
+VARSET_BOX = Path("tests/fixtures/tier6_parametric/varset_box.FCStd")
+
+
+def test_varset_parameters_reach_the_signature():
+    """A VarSet drives the emit exactly as a spreadsheet does."""
+    source = _translate(VARSET_BOX, emit="function")
+    assert "def make_part(" in source, (
+        "VarSet-driven file should emit a make_part wrapper.\n\nSource:\n" + source
+    )
+    signature = source.split("def make_part(", 1)[1].split(")", 1)[0]
+    for name in ("width", "depth", "height"):
+        assert name in signature, (
+            f"VarSet variable {name!r} missing from signature: {signature}"
+        )
+    # The fixture also holds a string variable; only dimensions are parameters.
+    assert "material" not in source
+
+
+def test_varset_defaults_match_snapshot():
+    """Defaults reproduce the geometry FreeCAD itself builds."""
+    source = _translate(VARSET_BOX)
+    namespace: dict = {}
+    exec(source, namespace)
+    part = namespace["result"]
+    assert_equivalent(
+        extract_build123d(part),
+        Properties.from_file(VARSET_BOX.with_suffix(".expected.json")),
+        actual_part=part,
+        pointcloud_path=VARSET_BOX.with_suffix(".pointcloud.json"),
+    )
+
+
+def test_varset_override_scales_geometry():
+    """The emitted parameter is live, not a decorative default."""
+    source = _translate(VARSET_BOX, emit="function")
+    namespace: dict = {}
+    exec(source, namespace)
+    make_part = namespace["make_part"]
+    base = extract_build123d(make_part())
+    wide = extract_build123d(make_part(width=80))  # source value was 40
+    assert wide.volume == pytest.approx(base.volume * 2, rel=1e-9), (
+        f"Expected volume to double when width doubled: base={base.volume}, "
+        f"wide={wide.volume}"
+    )

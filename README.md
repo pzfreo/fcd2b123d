@@ -11,10 +11,11 @@ me a bracket") but trivial to iterate on once the geometry is in code.
 This translator goes one direction: FreeCAD → build123d. Rough something out
 in FreeCAD, translate, then ask an LLM to vary it.
 
-For parametric source files (those with a FreeCAD Spreadsheet), the output is
-a Python *function* whose signature mirrors the spreadsheet's named
-parameters — so a downstream consumer can call `make_part(width=50)` rather
-than search-and-replace module-level constants.
+For parametric source files — those driven by a FreeCAD Spreadsheet or, since
+FreeCAD 1.0, an `App::VarSet` — the output is a Python *function* whose
+signature mirrors the source's named parameters, so a downstream consumer can
+call `make_part(width=50)` rather than search-and-replace module-level
+constants.
 
 ## Status
 
@@ -29,8 +30,8 @@ test methodology, and ADRs are all in `SPEC.md` and `docs/adr/`.
 | 3 | Fillet / Chamfer (with `Face<N>` references) | ✅ |
 | 4 | Patterns (LinearPattern / PolarPattern / Mirrored) | ✅ |
 | 5 | Boolean ops between bodies (Part::Cut / Fuse / Common) | partial — `Part::Cut` and `Fuse` work via Part-workbench paths; `Common` not yet |
-| 6 | Spreadsheet preservation → function-wrapped emit | ✅ |
-| 7 | `PartDesign::Hole`, Sweep, Loft, Helix, App::VarSet | not yet |
+| 6 | Parameter preservation (`Spreadsheet::Sheet` aliases, `App::VarSet` variables) → function-wrapped emit | ✅ |
+| 7 | `PartDesign::Hole`, Sweep, Loft, Helix | not yet |
 
 **Test status:** 148 tests pass across two CI lanes (a fast lane for the
 schema and comparison utility; a slower lane that runs the translator end-to-end
@@ -173,8 +174,14 @@ curl -L https://github.com/mamba-org/micromamba-releases/releases/latest/downloa
   -o .conda/bin/micromamba
 chmod +x .conda/bin/micromamba
 MAMBA_ROOT_PREFIX="$PWD/.conda" .conda/bin/micromamba \
-  create -y -n freecad -c conda-forge freecad=1.0 numpy black python=3.12
+  create -y -n freecad -c conda-forge freecad=1.1.3 numpy black python=3.12
 ```
+
+FreeCAD 1.1 is what CI pins and what the fixtures are snapshotted against.
+Files saved by 1.0 still translate: 1.1 renamed two property vocabularies on
+load (pattern `Mode` `'length'`/`'angle'`/`'offset'` became `'Extent'`/
+`'Spacing'`, and Pad `Type='TwoLengths'` became `SideType='Two sides'`), and
+the translator accepts both spellings.
 
 Why two environments? See [ADR-0001](docs/adr/0001-freecad-runtime-vs-standalone-parser.md):
 the translator uses FreeCAD's own Python API to read the file (it's the only
@@ -257,7 +264,7 @@ src/fcstd2b123d/
   primitives.py       — tier-1 Part-workbench primitives
   sketch.py           — Sketcher (line / arc / circle, multi-loop)
   partdesign.py       — Body / Pad / Pocket / Revolution / Fillet / Chamfer / patterns
-  parametric.py       — Spreadsheet extraction + ExpressionEngine rewriting
+  parametric.py       — Spreadsheet / VarSet extraction + ExpressionEngine rewriting
   emitter.py          — code emission + black formatting
   context.py          — TranslationContext (accumulates per-step structured data)
   freecad_properties.py — geometric property extraction (translator-side, lightweight)
