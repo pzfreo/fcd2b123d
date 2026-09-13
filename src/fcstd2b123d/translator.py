@@ -38,10 +38,12 @@ INFRASTRUCTURE_TYPES = {
     # (e.g. multi-Body mannequins). They're support frames for downstream
     # features and don't translate to anything on their own.
     "PartDesign::CoordinateSystem",
-    # Spreadsheets carry the parameter values; the translator extracts them
-    # via extract_parameters() before the main loop runs, so they don't
-    # need a direct translation.
+    # Parameter holders carry values, not geometry; the translator extracts
+    # them via extract_parameters() before the main loop runs, so they don't
+    # need a direct translation. A VarSet is the FreeCAD 1.0 equivalent of a
+    # parameter spreadsheet.
     "Spreadsheet::Sheet",
+    "App::VarSet",
     # Measure workbench annotations — viewport-only, no geometry to translate.
     "Measure::MeasureLength",
     "Measure::MeasureDistance",
@@ -101,10 +103,10 @@ def _auto_select_style(doc) -> str:
     ):
         return "algebra"
 
-    # Tier-6 spreadsheet-driven models already render as
+    # Tier-6 parameter-driven models already render as
     # ``def make_part(width=..., ...):`` — the function wrapper makes
     # the body short enough that algebra reads fine.
-    if any(o.TypeId == "Spreadsheet::Sheet" for o in doc.Objects):
+    if any(o.TypeId in ("Spreadsheet::Sheet", "App::VarSet") for o in doc.Objects):
         return "algebra"
 
     # Sketches containing ellipses with non-zero center or rotation are
@@ -186,7 +188,8 @@ def translate_with_context(
         ctx = TranslationContext(
             source_path=path, freecad_version=freecad_version(), style=body_style
         )
-        # Tier-6: pull parameters from Spreadsheet(s) before geometry walk.
+        # Tier-6: pull parameters from Spreadsheet(s) / VarSet(s) before the
+        # geometry walk.
         # Handlers consult ctx.parameters when emitting property values.
         ctx.parameters = extract_parameters(doc)
 
